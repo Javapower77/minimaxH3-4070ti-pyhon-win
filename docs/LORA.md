@@ -9,7 +9,7 @@ the Hugging Face MiniMax-H3 docs).
 
 Accepted keys:
 
-```
+```text
 <module>.lora_A.default.weight
 <module>.lora_B.default.weight
 ```
@@ -32,7 +32,7 @@ Official MiniMax-H3 LoRAs are **mixed-rank** (64 on attention/FFN, 16 on AdaLN).
 
 Typical target modules:
 
-```
+```text
 to_q  to_k  to_v  to_out.0
 ff.net.0.proj  ff.net.2
 AdaLN / modulation projections (rank 16)
@@ -40,7 +40,7 @@ AdaLN / modulation projections (rank 16)
 
 ## Effective scale
 
-```
+```text
 effective_scale = lora_scale * lora_alpha / rank
 ```
 
@@ -61,6 +61,7 @@ adapter plus whatever alpha the official loader applied.
 | `fl2va_turbo_8step` | `minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors` | 8 | 8 | 0.5 MP |
 | `fl2va_turbo_4step_v01` | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` | 4 | 8 | 0.5 MP |
 | `larryvrh_turbo_v4` | `minimax_h3_turbo_v4_step600_ema.safetensors` | 6 | 8 | 1.0 MP |
+| `taomate_fl2va_3step_ema` | `minimax_h3_taomate_3step_lora_avg_rank_19_bf16.safetensors` | 4 | 19 | 0.4 MP |
 | `dasiwa_multistep_r48_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r48_pruned.safetensors` | 8 | dynamic/r48 | 1.0 MP |
 | `dasiwa_multistep_r96_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r96_pruned.safetensors` | 8 | dynamic/r96 | 1.0 MP |
 | `dasiwa_multistep_r144_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r144_pruned.safetensors` | 8 | dynamic/r144 | 1.0 MP |
@@ -70,13 +71,56 @@ adapter plus whatever alpha the official loader applied.
 Hub: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 and [larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora).
 
-### TaoMate 3-step EMA on 12 GB GPUs
+### TaoMate FL2VA 3-step EMA: default 12 GB profile
 
-The default low-memory entry is Civitai model version `3322352`, file
-`minimax_h3_taomate_3step_lora_avg_rank_19_bf16.safetensors` (about 173 MB).
-It uses the pruned ComfyUI path with the FP8-scaled FL2VA transformer and the
-NVFP4 Qwen3-VL encoder. Recommended settings are 4–6 steps, Euler/simple, and
-strength 0.75. The app defaults to 4 steps and 0.4 MP for a 4070 Ti 12 GB.
+The default low-memory entry is the TaoMate FL2VA 3-step EMA release from
+[Civitai model version 3322352](https://civitai.red/models/2837571?modelVersionId=3322352).
+This project downloads file ID `3208405`:
+
+`minimax_h3_taomate_3step_lora_avg_rank_19_bf16.safetensors`
+
+| Property | Value |
+| --- | --- |
+| File size | 177,439 KiB (about 173 MB) |
+| Precision / rank | BF16, averaged rank 19 |
+| SHA-256 | `DE9663D974A884B477556748239C6F28239F7CA1825BE270F98F023FF5DAB6A7` |
+| Workflow | MiniMax-H3 FL2VA, pruned architecture |
+| Recommended NFE | 4–6; application default 4 |
+| Sampler / scheduler | Euler / simple |
+| Strength | 0.75 |
+| Default canvas | 0.4 MP; 864×480 for 16:9 |
+| Backend | Isolated local ComfyUI worker with DynamicVRAM |
+
+The model name says “3-step,” but the release page currently recommends 4–6
+steps. The studio therefore uses 4 transformer evaluations. Increasing to 5 or 6
+can improve difficult motion but costs proportionally more time; reducing to 3 is
+not the supported default.
+
+The LoRA is only one part of the low-memory profile. It runs with the
+`minimax_h3_fl2va_pruned_fp8_scaled.safetensors` transformer and
+`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` text encoder. DynamicVRAM streams
+those components through the 4070 Ti while keeping staged weights in system RAM.
+
+Download and verify the adapter:
+
+```powershell
+.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
+  --loras --lora-id taomate_fl2va_3step_ema
+```
+
+Install or repair the complete pruned backend and post-processing assets:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\setup_pruned_backend.py
+```
+
+Compatibility rules:
+
+- Do not apply this adapter to the full Diffusers FL2VA transformer.
+- Do not combine it with Ref2VA adapters.
+- Extra LoRAs used with it must target the same pruned, 8-wide AdaLN architecture.
+- Keep strength near 0.75 before stacking style adapters.
+- Start at 0.2–0.4 MP on a 12 GB card; upscale decoded frames afterward when needed.
 
 The larger rank-128 BF16 and full FP32 files are not the default because they add
 RAM, disk, and loading pressure without making the base transformer fit in VRAM.
@@ -99,7 +143,7 @@ python scripts/setup_pruned_backend.py
 ```
 
 The worker is installed under `.runtime/ComfyUI`, listens only on
-`127.0.0.1:8188`, starts automatically when a pruned entry is selected, and
+`127.0.0.1:18188` by default, starts automatically when a pruned entry is selected, and
 supports text, first-frame, last-frame, and first+last-frame FL2VA generation.
 It uses Euler/simple and unloads its models after each request to return VRAM.
 Only LoRAs compatible with the pruned 8-wide AdaLN architecture may be stacked
@@ -147,7 +191,7 @@ You can stack:
 
 1. Catalog turbo LoRA (`adapter_name=turbo`)
 2. Up to five persistent local SafeTensors (`adapter_name=extra_1` through
-	`extra_5`), each with an independent strength from `0.0` to `2.0`.
+   `extra_5`), each with an independent strength from `0.0` to `2.0`.
 
 The same file cannot occupy multiple slots or duplicate the active catalog
 adapter. Additional adapters increase host/GPU memory use and initial load time;

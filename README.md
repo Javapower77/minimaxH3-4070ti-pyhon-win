@@ -25,6 +25,54 @@ Official sources:
 - Diffusers API: [MiniMax-H3 pipeline](https://huggingface.co/docs/diffusers/main/en/api/pipelines/minimax_h3)
 - Turbo LoRAs: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 - Community LoRA: [larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora)
+- Default TaoMate release: [Civitai model version 3322352](https://civitai.red/models/2837571?modelVersionId=3322352)
+- Release history: [CHANGELOG.md](CHANGELOG.md)
+
+## Default TaoMate model profile
+
+The 12 GB profile does not run the full Diffusers checkpoint directly. It combines
+the pruned/quantized MiniMax-H3 FL2VA backend with the compact TaoMate Turbo LoRA:
+
+| Component | Artifact | Purpose |
+| --- | --- | --- |
+| FL2VA transformer | `minimax_h3_fl2va_pruned_fp8_scaled.safetensors` | ~21 GB FP8-scaled pruned video/audio transformer |
+| Text encoder | `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | ~15.7 GB NVFP4 Qwen3-VL-32B conditioning encoder |
+| Turbo LoRA | `minimax_h3_taomate_3step_lora_avg_rank_19_bf16.safetensors` | Compact ~173 MB TaoMate FL2VA acceleration adapter |
+| Video VAE | `minimax_h3_video_vae_fp16.safetensors` | Video latent decode |
+| Audio VAE | `minimax_h3_audio_vae_fp32.safetensors` | Stereo audio decode |
+
+TaoMate catalog settings:
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| Catalog ID | `taomate_fl2va_3step_ema` | Default entry in `configs/default.yaml` |
+| Backend | `comfy_pruned` | Uses the isolated loopback ComfyUI worker |
+| NFE | `4` | Upstream guidance is 4–6 steps |
+| Sampler / scheduler | Euler / simple | No CFG |
+| LoRA strength | `0.75` | Recommended starting strength |
+| Canvas | `0.4` MP / 864×480 at 16:9 | Chosen for 12 GB VRAM |
+| Video/audio shift | `12.0` / `3.0` | Catalog defaults |
+| SHA-256 | `DE9663D974A884B477556748239C6F28239F7CA1825BE270F98F023FF5DAB6A7` | Verified after download |
+
+Despite the upstream “3-step EMA” name, this application defaults to **4 NFE**
+because the published recommendation is 4–6 steps and the extra step is more
+stable for the low-memory workflow. The selected 173 MB avg-rank-19 BF16 file is
+different from the 2.31 GB full-FP32 and 1.21 GB rank-128 variants on the same
+Civitai release.
+
+The TaoMate adapter is intended for the **pruned FL2VA architecture**. Do not load
+it through the full Diffusers transformer or stack it with Ref2VA adapters. The
+application validates this boundary and routes the catalog entry automatically.
+
+Install only the default TaoMate LoRA:
+
+```powershell
+.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
+  --loras --lora-id taomate_fl2va_3step_ema
+```
+
+See [docs/LORA.md](docs/LORA.md#taomate-fl2va-3-step-ema-default-12-gb-profile)
+for compatibility, file provenance, and tuning details.
 
 ## What FL2VA does
 
@@ -307,7 +355,7 @@ Container artifacts:
 
 ## Layout
 
-```
+```text
 minimaxH3/
 ├── app.py / generate.py
 ├── configs/default.yaml          # RTX 4070 Ti low-memory runtime
@@ -316,8 +364,8 @@ minimaxH3/
 ├── scripts/setup_venv.sh         # Python 3.11 + torch cu128
 ├── scripts/setup_windows.ps1     # Windows 11 environment + model setup
 ├── scripts/run_windows.ps1       # Windows launcher
-├── scripts/download_models.py    # FL2VA partition + LoRAs
-├── scripts/azure_h100_setup.sh
+├── scripts/setup_pruned_backend.py # ComfyUI + quantized models + enhancements
+├── CHANGELOG.md                   # Date-based release and feature history
 ├── docs/                         # Azure, LoRA, prompting, troubleshooting
 └── models/                       # created on download (gitignored)
 ```
@@ -403,7 +451,7 @@ tunnel. From a browser on the IP allowed in NSG:
 http://<vm-public-ip>:7860
 ```
 
-On this VM that is typically `http://20.70.201.100:7860`.
+On this VM that is typically `http://xx.xx.xx.xx:7860`.
 
 NSG must allow TCP **7860** from your client IP only (not `0.0.0.0/0`).
 SSH tunnel still works if you prefer not to open the NSG:
