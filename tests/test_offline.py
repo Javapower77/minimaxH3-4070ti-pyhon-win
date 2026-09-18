@@ -1,4 +1,6 @@
 import os
+import runpy
+import sys
 from pathlib import Path
 
 from minimax_h3_fl2v.config import load_config
@@ -32,6 +34,21 @@ def test_enforce_offline_runtime_pins_env():
     assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "1"
     assert os.environ["GRADIO_ANALYTICS_ENABLED"] == "False"
     assert os.environ["GRADIO_SHARE"] == "0"
+
+
+def test_windows_launcher_selects_socket_event_loop(monkeypatch):
+    if sys.platform != "win32":
+        return
+    import asyncio
+    import minimax_h3_fl2v.ui
+
+    monkeypatch.setattr(minimax_h3_fl2v.ui, "main", lambda: None)
+    previous = asyncio.get_event_loop_policy()
+    try:
+        runpy.run_path(str(Path(__file__).resolve().parents[1] / "app.py"), run_name="__main__")
+        assert isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy)
+    finally:
+        asyncio.set_event_loop_policy(previous)
 
 
 def test_config_never_shares_and_never_uses_hub_attention():
