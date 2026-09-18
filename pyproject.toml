@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minimax-h3-fl2v"
+version = "1.0.0"
+description = "Local MiniMax-H3 FL2VA (first/last-frame to video+audio) with LoRA, Gradio, and H100 support."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { text = "Apache-2.0" }
+authors = [{ name = "MiniMax H3 FL2V local studio" }]
+keywords = ["minimax-h3", "fl2va", "lora", "safetensors", "gradio", "h100"]
+classifiers = [
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: Apache Software License",
+  "Topic :: Multimedia :: Video",
+]
+dependencies = [
+  "diffusers @ git+https://github.com/huggingface/diffusers.git",
+  "transformers>=4.57.0",
+  "accelerate>=1.4.0",
+  "peft>=0.14.0",
+  "safetensors>=0.5.0",
+  "huggingface_hub>=0.30.0",
+  "gradio>=5.20.0",
+  "Pillow>=10.4.0",
+  "numpy>=1.26.0",
+  "PyYAML>=6.0.2",
+  "python-dotenv>=1.0.1",
+  "imageio-ffmpeg>=0.5.1",
+  "av>=14.0.0",
+  "einops>=0.8.0",
+  "sentencepiece>=0.2.0",
+  "protobuf>=5.29.0",
+  "soundfile>=0.13.0",
+  "requests>=2.32.0",
+  "websocket-client>=1.8.0",
+  "tqdm>=4.67.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.0", "ruff>=0.9.0"]
+
+[project.scripts]
+minimax-h3-studio = "minimax_h3_fl2v.ui:main"
+minimax-h3-generate = "minimax_h3_fl2v.cli:main"
+minimax-h3-download = "minimax_h3_fl2v.download:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

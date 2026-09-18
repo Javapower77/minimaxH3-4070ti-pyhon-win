@@ -1,0 +1,54 @@
+# Default runtime targets an RTX 4070 Ti 12 GB with 64 GB system RAM.
+# Full bf16 MiniMax-H3 + Qwen3-VL-32B does not fit in 80 GB. CPU offload is required
+# unless you switch to a quantized transformer. See docs/AZURE_H100.md.
+# Inference is offline-only: local_dir must already contain the snapshot.
+
+model_id: MiniMaxAI/MiniMax-H3
+local_dir: models/MiniMax-H3
+workflow: fl2va
+device: cuda
+dtype: bfloat16
+
+# Official single-GPU recipe: ComponentsManager auto CPU offload.
+cpu_offload: true
+# H3 decode needs multi-GiB transient buffers. Keep substantial headroom on
+# the 94 GiB H100 NVL instead of filling it with resident component weights.
+memory_reserve_margin: 20GB
+attention_backend: _flash_3
+
+output_dir: outputs
+lora_dir: models/loras
+upload_dir: uploads
+
+# Generation defaults — FL2VA Turbo 8-step v1.0 768p (LightX2V studio).
+default_lora_id: taomate_fl2va_3step_ema
+nfe: 4
+video_shift: 6.0
+audio_shift: 3.0
+lora_alpha: 128
+lora_scale: 1.0
+fuse_lora: false
+megapixels: 0.4
+aspect_ratio: "auto"
+duration_seconds: 5.0
+seed: 42
+fps: 24
+
+# Isolated ComfyUI worker used by low-memory/pruned catalog entries. The FP8
+# transformer is ~21 GB instead of ~40 GB BF16; DynamicVRAM streams it through
+# the 12 GB card. Keep cache disabled to stay within 64 GB host RAM.
+comfy_model: minimax_h3_fl2va_pruned_fp8_scaled.safetensors
+comfy_text_encoder: qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+comfy_reserve_vram_gb: 1.0
+comfy_cache_none: true
+comfy_cpu_vae: false
+upscale_model: RealESRGAN_x4plus.safetensors
+interpolation_model: rife_v4.25_lite.safetensors
+face_restore_model: codeformer.pth
+
+gradio:
+  server_name: 0.0.0.0
+  server_port: 7860
+  share: false
+  max_queue: 4
+  title: MiniMax-H3 FL2VA Studio

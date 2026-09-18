@@ -1,0 +1,148 @@
+# Catalog of Diffusers PEFT LoRAs (*.safetensors).
+# Do NOT mix ComfyUI-named files here — those use a different key layout.
+# Official LightX2V files: https://huggingface.co/lightx2v/Minimax-h3-Turbo
+
+catalog:
+  - id: none
+    name: Base MiniMax-H3 (no LoRA, ~50 NFE)
+    repo: null
+    filename: null
+    nfe: 50
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 8
+    lora_scale: 1.0
+    megapixels: 1.0
+    notes: Highest quality, slowest. Use only if you can wait several minutes per clip.
+
+  - id: fl2va_turbo_8step_768p
+    name: FL2VA Turbo 8-step v1.0 768p (recommended)
+    repo: lightx2v/Minimax-h3-Turbo
+    filename: minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors
+    nfe: 8
+    video_shift: 6.0
+    audio_shift: 3.0
+    lora_alpha: 128
+    lora_scale: 1.0
+    megapixels: 1.0
+    recommended: true
+    notes: LightX2V Studio default. 1344x768, 8 transformer evaluations.
+
+  - id: fl2va_turbo_4step_768p
+    name: FL2VA Turbo 4-step v1.0 768p
+    repo: lightx2v/Minimax-h3-Turbo
+    filename: minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors
+    nfe: 4
+    video_shift: 6.0
+    audio_shift: 3.0
+    lora_alpha: 128
+    lora_scale: 1.0
+    megapixels: 1.0
+    notes: Fastest 768p path. More motion smear on large/fast action.
+
+  - id: fl2va_turbo_8step
+    name: FL2VA Turbo 8-step v1.0 (544p mixed AR)
+    repo: lightx2v/Minimax-h3-Turbo
+    filename: minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 8
+    lora_scale: 1.0
+    megapixels: 0.5
+    notes: Mixed aspect-ratio 544p family. Lower VRAM than 768p.
+
+  - id: fl2va_turbo_4step_v01
+    name: FL2VA Turbo 4-step v0.1
+    repo: lightx2v/Minimax-h3-Turbo
+    filename: minimax_h3_fl2v_turbo_4step_v0.1.safetensors
+    nfe: 4
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 8
+    lora_scale: 1.0
+    megapixels: 0.5
+    notes: First public turbo LoRA. Prefer v1.0 files when available.
+
+  - id: larryvrh_turbo_v4
+    name: larryvrh Turbo v4 step600 EMA
+    repo: larryvrh/MiniMax-H3-Turbo-Lora
+    filename: minimax_h3_turbo_v4_step600_ema.safetensors
+    nfe: 6
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 8
+    lora_scale: 1.0
+    megapixels: 1.0
+    notes: Community few-step LoRA. Best at 6–8 steps, strength 1.0, simple scheduler.
+
+  - id: taomate_fl2va_3step_ema
+    name: TaoMate FL2VA 3-step EMA avg-rank-19 (12 GB recommended)
+    repo: null
+    filename: minimax_h3_taomate_3step_lora_avg_rank_19_bf16.safetensors
+    download_url: https://civitai.red/api/download/models/3322352?fileId=3208405
+    sha256: DE9663D974A884B477556748239C6F28239F7CA1825BE270F98F023FF5DAB6A7
+    nfe: 4
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 19
+    lora_scale: 0.75
+    megapixels: 0.4
+    recommended: true
+    backend: comfy_pruned
+    notes: Civitai 3322352 compact BF16 variant (173 MB); use 4-6 steps, Euler/simple, strength 0.75. Routes to the FP8 pruned ComfyUI backend for 12 GB GPUs.
+
+  # Civitai model version 3315815. These files contain direct AdaLN patches
+  # for the 8-wide pruned FL2VA architecture. The app routes these entries to
+  # its isolated ComfyUI backend; standard entries continue using Diffusers.
+  - id: dasiwa_multistep_r48_pruned
+    name: Dasiwa FL2VA Turbo Multistep v1 r48 (pruned)
+    repo: null
+    filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r48_pruned.safetensors
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 48
+    lora_scale: 1.0
+    megapixels: 1.0
+    backend: comfy_pruned
+    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Lowest memory. Automatically uses the local pruned ComfyUI backend. SHA256 DA8CD063D8E960FD5052901AE05D144F6C4ECC1B9362C1561A21C472649BEA52.
+
+  - id: dasiwa_multistep_r96_pruned
+    name: Dasiwa FL2VA Turbo Multistep v1 r96 (pruned)
+    repo: null
+    filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r96_pruned.safetensors
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 96
+    lora_scale: 1.0
+    megapixels: 1.0
+    backend: comfy_pruned
+    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend. SHA256 F5E49095F65957D78A42BB24FBF514C01637A44DA7E71D4FB917A10EB4F9AD95.
+
+  - id: dasiwa_multistep_r144_pruned
+    name: Dasiwa FL2VA Turbo Multistep v1 r144 (pruned)
+    repo: null
+    filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r144_pruned.safetensors
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 144
+    lora_scale: 1.0
+    megapixels: 1.0
+    backend: comfy_pruned
+    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Quality/memory compromise. Automatically uses the local pruned ComfyUI backend. SHA256 58DD5EF840E9815CDE61E24FA709257458E46994738233AFC9DDF22CE7FC66D0.
+
+  - id: dasiwa_multistep_r512_pruned
+    name: Dasiwa FL2VA Turbo Multistep v1 r512 (pruned)
+    repo: null
+    filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r512_pruned.safetensors
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 512
+    lora_scale: 1.0
+    megapixels: 1.0
+    backend: comfy_pruned
+    notes: Civitai 3315815; highest-quality and largest rank, 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend. SHA256 70F1A59B130162CB15E5D9DB8ACFA227A4C460405ED31882B215A570E1BCBCD2.

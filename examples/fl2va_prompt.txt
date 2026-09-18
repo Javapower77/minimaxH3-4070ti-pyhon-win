@@ -1,0 +1,5 @@
+integrated_multimodal_description: A woman in a rust-red wool coat walks toward a subway entrance in heavy neon rain. Handheld camera, shallow depth of field, cyan storefronts and sodium street lamps reflecting on wet asphalt. She pauses at the last frame under the station sign, looking back over her shoulder.
+
+overall_soundscape: Close rain hiss, distant traffic, heels on wet concrete, a subway rumble under the street, cloth movement, one distant car horn. Speech is absent.
+
+non_diegetic_music: Sparse analog synth pad, low and slow, never overpowering the rain.

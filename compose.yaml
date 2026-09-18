@@ -1,0 +1,74 @@
+name: minimax-h3
+
+services:
+  setup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: minimax-h3:local
+    command: ["setup"]
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      MINIMAX_H3_COMFY_ROOT: /opt/comfyui
+      MINIMAX_H3_COMFY_PYTHON: /opt/venv/bin/python
+      MINIMAX_H3_COMFY_PORT: "18188"
+      MINIMAX_H3_LORA_DIR: /data/models/loras
+    volumes:
+      - comfy_models:/opt/comfyui/models
+      - loras:/data/models/loras
+      - hf_home:/data/hf-home
+    restart: "no"
+    profiles: ["setup"]
+
+  studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: minimax-h3:local
+    init: true
+    ports:
+      - "${MINIMAX_H3_PORT:-7860}:7860"
+    environment:
+      GRADIO_SERVER_PORT: "7860"
+      MINIMAX_H3_COMFY_ROOT: /opt/comfyui
+      MINIMAX_H3_COMFY_PYTHON: /opt/venv/bin/python
+      MINIMAX_H3_COMFY_MODEL: minimax_h3_fl2va_pruned_fp8_scaled.safetensors
+      MINIMAX_H3_COMFY_TEXT_ENCODER: qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+      MINIMAX_H3_COMFY_RESERVE_VRAM_GB: ${MINIMAX_H3_COMFY_RESERVE_VRAM_GB:-1.0}
+      MINIMAX_H3_LORA_DIR: /data/models/loras
+      MINIMAX_H3_LOCAL_DIR: /data/models/MiniMax-H3
+      HF_HOME: /data/hf-home
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      DIFFUSERS_OFFLINE: "1"
+      GRADIO_ANALYTICS_ENABLED: "False"
+    volumes:
+      - comfy_models:/opt/comfyui/models
+      - loras:/data/models/loras
+      - outputs:/opt/app/outputs
+      - uploads:/opt/app/uploads
+      - hf_home:/data/hf-home
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: "8gb"
+    mem_limit: ${MINIMAX_H3_MEMORY_LIMIT:-60g}
+    memswap_limit: ${MINIMAX_H3_MEMORY_SWAP_LIMIT:-76g}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "/opt/app/docker/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
+
+volumes:
+  comfy_models:
+  loras:
+  outputs:
+  uploads:
+  hf_home:
