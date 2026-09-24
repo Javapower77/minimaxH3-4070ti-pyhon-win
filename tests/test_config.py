@@ -28,6 +28,19 @@ def test_default_low_vram_config(monkeypatch):
     assert spec.filename.endswith(".safetensors")
 
 
+def test_silveroxides_dareties_pruned_is_catalogued():
+    cfg = load_config()
+    spec = cfg.lora_by_id("silveroxides_dareties_pruned_v1")
+    assert spec.filename == "minimax_h3_fl2v_turbo_silver_dareties_comfy_pruned_v1.safetensors"
+    assert spec.repo == "silveroxides/MiniMax-H3_tests"
+    assert spec.nfe == 8
+    assert spec.lora_scale == 0.9
+    assert spec.megapixels == 0.5
+    assert spec.backend == "comfy_pruned"
+    assert spec.sha256 == "9AAB6353CE76F0A1C6A6FBBEAA1A4C60DECED365E328BC14DDB0B7B9F0849B48"
+    assert "full_v1" in spec.notes
+
+
 def test_civitai_multistep_ranks_are_catalogued():
     cfg = load_config()
     expected = {

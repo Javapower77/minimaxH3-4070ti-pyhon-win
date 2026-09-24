@@ -134,3 +134,35 @@ def test_pruned_validator_rejects_full_adaln(tmp_path):
         assert "input width 2688" in str(exc)
     else:
         raise AssertionError("expected full AdaLN rejection")
+
+
+def test_pruned_validator_accepts_eight_wide_adaln_diff(tmp_path):
+    path = tmp_path / "pruned-diff.safetensors"
+    save_file(
+        {"diffusion_model.blocks.0.adaln_proj.linear.diff": torch.zeros(16, 8)},
+        path,
+    )
+    validate_pruned_fl2va_lora(path)
+
+
+def test_pruned_validator_rejects_full_adaln_diff(tmp_path):
+    path = tmp_path / "full-diff.safetensors"
+    save_file(
+        {"diffusion_model.blocks.0.adaln_proj.linear.diff": torch.zeros(16, 2688)},
+        path,
+    )
+    try:
+        validate_pruned_fl2va_lora(path)
+    except ValueError as exc:
+        assert "input width 2688" in str(exc)
+    else:
+        raise AssertionError("expected full AdaLN diff rejection")
+
+
+def test_local_silveroxides_dareties_file_is_pruned_compatible():
+    from pathlib import Path
+
+    path = Path("models/loras/minimax_h3_fl2v_turbo_silver_dareties_comfy_pruned_v1.safetensors")
+    if not path.is_file():
+        return
+    validate_pruned_fl2va_lora(path)

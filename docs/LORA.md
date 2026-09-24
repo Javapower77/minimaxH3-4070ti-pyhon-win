@@ -62,14 +62,16 @@ adapter plus whatever alpha the official loader applied.
 | `fl2va_turbo_4step_v01` | `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` | 4 | 8 | 0.5 MP |
 | `larryvrh_turbo_v4` | `minimax_h3_turbo_v4_step600_ema.safetensors` | 6 | 8 | 1.0 MP |
 | `taomate_fl2va_3step_ema` | `minimax_h3_taomate_3step_lora_avg_rank_19_bf16.safetensors` | 4 | 19 | 0.4 MP |
+| `silveroxides_dareties_pruned_v1` | `minimax_h3_fl2v_turbo_silver_dareties_comfy_pruned_v1.safetensors` | 8 | mixed/~64 | 0.5 MP |
 | `dasiwa_multistep_r48_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r48_pruned.safetensors` | 8 | dynamic/r48 | 1.0 MP |
 | `dasiwa_multistep_r96_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r96_pruned.safetensors` | 8 | dynamic/r96 | 1.0 MP |
 | `dasiwa_multistep_r144_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r144_pruned.safetensors` | 8 | dynamic/r144 | 1.0 MP |
 | `dasiwa_multistep_r512_pruned` | `minimax_h3_fl2va_bf16_turbo_multistep_fro099_r512_pruned.safetensors` | 8 | dynamic/r512 | 1.0 MP |
 | `none` | — | 50 | — | 1.0 MP |
 
-Hub: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
-and [larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora).
+Hub: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo),
+[larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora),
+and [silveroxides/MiniMax-H3_tests](https://huggingface.co/silveroxides/MiniMax-H3_tests).
 
 ### TaoMate FL2VA 3-step EMA: default 12 GB profile
 
@@ -124,6 +126,48 @@ Compatibility rules:
 
 The larger rank-128 BF16 and full FP32 files are not the default because they add
 RAM, disk, and loading pressure without making the base transformer fit in VRAM.
+
+### Silveroxides DARE-TIES pruned v1
+
+Optional 12 GB catalog entry from
+[silveroxides/MiniMax-H3_tests](https://huggingface.co/silveroxides/MiniMax-H3_tests).
+This project catalogs only the pruned file:
+
+`minimax_h3_fl2v_turbo_silver_dareties_comfy_pruned_v1.safetensors`
+
+| Property | Value |
+| --- | --- |
+| File size | 765,582,016 bytes (about 766 MB) |
+| Precision / rank | BF16 DARE-TIES merge, mixed ranks clustered around 64–102 |
+| SHA-256 | `9AAB6353CE76F0A1C6A6FBBEAA1A4C60DECED365E328BC14DDB0B7B9F0849B48` |
+| Workflow | MiniMax-H3 FL2VA, pruned architecture |
+| AdaLN | Direct `diff` / `diff_b` patches at width 8 (`96768×8`) |
+| Recommended NFE | 6–8; application default 8 |
+| Sampler / scheduler | Euler / simple |
+| Strength | 0.9 |
+| Default canvas | 0.5 MP; 960×544 for 16:9 |
+| Backend | Isolated local ComfyUI worker with DynamicVRAM |
+
+Community reports on this exact filename are that 0.9 strength stays crisp at
+960×544. Related DARE-TIES pruned files are commonly run at 6–8 steps with
+Euler/simple. The sibling `minimax_h3_fl2v_turbo_silver_dareties_comfy_full_v1.safetensors`
+(829 MB) is **not** catalogued; it targets unpruned AdaLN and will not load on
+the 12 GB pruned backend.
+
+Download and verify the adapter:
+
+```powershell
+.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
+  --loras --lora-id silveroxides_dareties_pruned_v1
+```
+
+Compatibility rules:
+
+- Do not apply this adapter to the full Diffusers FL2VA transformer.
+- Do not combine it with Ref2VA adapters.
+- Extra LoRAs used with it must target the same pruned, 8-wide AdaLN architecture.
+- Keep strength near 0.9 before stacking style adapters.
+- Start at 0.5 MP on a 12 GB card; upscale decoded frames afterward when needed.
 
 ### Civitai Turbo Multistep v1 architecture notice
 

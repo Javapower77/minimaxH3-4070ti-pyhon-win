@@ -26,6 +26,7 @@ Official sources:
 - Turbo LoRAs: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo)
 - Community LoRA: [larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora)
 - Default TaoMate release: [Civitai model version 3322352](https://civitai.red/models/2837571?modelVersionId=3322352)
+- Optional DARE-TIES turbo: [silveroxides/MiniMax-H3_tests](https://huggingface.co/silveroxides/MiniMax-H3_tests) pruned v1
 - Release history: [CHANGELOG.md](CHANGELOG.md)
 
 ## Default TaoMate model profile
@@ -73,6 +74,16 @@ Install only the default TaoMate LoRA:
 
 See [docs/LORA.md](docs/LORA.md#taomate-fl2va-3-step-ema-default-12-gb-profile)
 for compatibility, file provenance, and tuning details.
+
+The optional Silveroxides DARE-TIES pruned v1 adapter
+(`silveroxides_dareties_pruned_v1`) is the same pruned AdaLN-8 architecture and
+also routes to the ComfyUI backend. Use 8 NFE, strength 0.9, and 0.5 MP
+(960×544). Do not select the 829 MB `full_v1` sibling. Download it with:
+
+```powershell
+.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
+  --loras --lora-id silveroxides_dareties_pruned_v1
+```
 
 ## What FL2VA does
 

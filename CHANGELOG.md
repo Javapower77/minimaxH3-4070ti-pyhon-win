@@ -10,6 +10,10 @@ uses date-based development entries because no tagged release series exists yet.
 - Dedicated documentation for the default TaoMate FL2VA 3-step EMA avg-rank-19
   LoRA, including provenance, checksum, backend compatibility, and recommended
   RTX 4070 Ti settings.
+- Silveroxides DARE-TIES pruned v1 LoRA in the catalog for the 12 GB ComfyUI
+  backend, with SHA-256 `9AAB6353CE76F0A1C6A6FBBEAA1A4C60DECED365E328BC14DDB0B7B9F0849B48`.
+- Pruned AdaLN validation now also checks direct `.diff` patches, not only
+  LoRA A/down matrices.
 - This changelog.
 
 ## [2026-09-17]

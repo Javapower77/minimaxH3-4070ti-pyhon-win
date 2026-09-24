@@ -105,13 +105,15 @@ def validate_pruned_fl2va_lora(path: Path) -> None:
         for key in checkpoint.keys():
             lower = key.lower()
             if "adaln" not in lower or not (
-                key.endswith(".lora_A.weight") or key.endswith(".lora_down.weight")
+                key.endswith(".lora_A.weight")
+                or key.endswith(".lora_down.weight")
+                or key.endswith(".diff")
             ):
                 continue
             shape = tuple(checkpoint.get_slice(key).get_shape())
-            if len(shape) == 2 and shape[1] != 8:
+            if len(shape) == 2 and shape[-1] != 8:
                 raise ValueError(
-                    f"{path.name} contains a full-model AdaLN adapter with input width {shape[1]}; "
+                    f"{path.name} contains a full-model AdaLN adapter with input width {shape[-1]}; "
                     "the pruned FL2VA backend requires width 8."
                 )
 

@@ -92,6 +92,23 @@ catalog:
     backend: comfy_pruned
     notes: Civitai 3322352 compact BF16 variant (173 MB); use 4-6 steps, Euler/simple, strength 0.75. Routes to the FP8 pruned ComfyUI backend for 12 GB GPUs.
 
+  # Hugging Face silveroxides/MiniMax-H3_tests. DARE-TIES merge with direct
+  # 8-wide AdaLN diff patches for the pruned FL2VA architecture. The 829 MB
+  # full_v1 sibling is not catalogued because it targets unpruned AdaLN.
+  - id: silveroxides_dareties_pruned_v1
+    name: Silveroxides FL2VA DARE-TIES pruned v1 (12 GB)
+    repo: silveroxides/MiniMax-H3_tests
+    filename: minimax_h3_fl2v_turbo_silver_dareties_comfy_pruned_v1.safetensors
+    sha256: 9AAB6353CE76F0A1C6A6FBBEAA1A4C60DECED365E328BC14DDB0B7B9F0849B48
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 64
+    lora_scale: 0.9
+    megapixels: 0.5
+    backend: comfy_pruned
+    notes: Hugging Face silveroxides/MiniMax-H3_tests DARE-TIES turbo; 8-wide AdaLN patches; 6-8 NFE (8 recommended), Euler/simple, strength 0.9, 0.5 MP / 960x544. Routes to the FP8 pruned ComfyUI backend. Do not use the 829 MB full_v1 sibling.
+
   # Civitai model version 3315815. These files contain direct AdaLN patches
   # for the 8-wide pruned FL2VA architecture. The app routes these entries to
   # its isolated ComfyUI backend; standard entries continue using Diffusers.
