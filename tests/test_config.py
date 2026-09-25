@@ -49,6 +49,18 @@ def test_civitai_multistep_ranks_are_catalogued():
         "dasiwa_multistep_r144_pruned": 144,
         "dasiwa_multistep_r512_pruned": 512,
     }
+    hashes = {
+        "dasiwa_multistep_r48_pruned": "DA8CD063D8E960FD5052901AE05D144F6C4ECC1B9362C1561A21C472649BEA52",
+        "dasiwa_multistep_r96_pruned": "F5E49095F65957D78A42BB24FBF514C01637A44DA7E71D4FB917A10EB4F9AD95",
+        "dasiwa_multistep_r144_pruned": "58DD5EF840E9815CDE61E24FA709257458E46994738233AFC9DDF22CE7FC66D0",
+        "dasiwa_multistep_r512_pruned": "70F1A59B130162CB15E5D9DB8ACFA227A4C460405ED31882B215A570E1BCBCD2",
+    }
+    file_ids = {
+        "dasiwa_multistep_r48_pruned": "3201294",
+        "dasiwa_multistep_r96_pruned": "3201308",
+        "dasiwa_multistep_r144_pruned": "3201318",
+        "dasiwa_multistep_r512_pruned": "3201336",
+    }
     for lora_id, rank in expected.items():
         spec = cfg.lora_by_id(lora_id)
         assert f"r{rank}_pruned" in spec.filename
@@ -56,3 +68,5 @@ def test_civitai_multistep_ranks_are_catalogued():
         assert spec.video_shift == 12.0
         assert spec.backend == "comfy_pruned"
         assert "pruned ComfyUI backend" in spec.notes
+        assert spec.download_url.endswith(f"fileId={file_ids[lora_id]}")
+        assert spec.sha256 == hashes[lora_id]

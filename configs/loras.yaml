@@ -116,6 +116,8 @@ catalog:
     name: Dasiwa FL2VA Turbo Multistep v1 r48 (pruned)
     repo: null
     filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r48_pruned.safetensors
+    download_url: https://civitai.red/api/download/models/3315815?fileId=3201294
+    sha256: DA8CD063D8E960FD5052901AE05D144F6C4ECC1B9362C1561A21C472649BEA52
     nfe: 8
     video_shift: 12.0
     audio_shift: 3.0
@@ -123,12 +125,14 @@ catalog:
     lora_scale: 1.0
     megapixels: 1.0
     backend: comfy_pruned
-    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Lowest memory. Automatically uses the local pruned ComfyUI backend. SHA256 DA8CD063D8E960FD5052901AE05D144F6C4ECC1B9362C1561A21C472649BEA52.
+    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Lowest memory. Automatically uses the local pruned ComfyUI backend.
 
   - id: dasiwa_multistep_r96_pruned
     name: Dasiwa FL2VA Turbo Multistep v1 r96 (pruned)
     repo: null
     filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r96_pruned.safetensors
+    download_url: https://civitai.red/api/download/models/3315815?fileId=3201308
+    sha256: F5E49095F65957D78A42BB24FBF514C01637A44DA7E71D4FB917A10EB4F9AD95
     nfe: 8
     video_shift: 12.0
     audio_shift: 3.0
@@ -136,12 +140,14 @@ catalog:
     lora_scale: 1.0
     megapixels: 1.0
     backend: comfy_pruned
-    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend. SHA256 F5E49095F65957D78A42BB24FBF514C01637A44DA7E71D4FB917A10EB4F9AD95.
+    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend.
 
   - id: dasiwa_multistep_r144_pruned
     name: Dasiwa FL2VA Turbo Multistep v1 r144 (pruned)
     repo: null
     filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r144_pruned.safetensors
+    download_url: https://civitai.red/api/download/models/3315815?fileId=3201318
+    sha256: 58DD5EF840E9815CDE61E24FA709257458E46994738233AFC9DDF22CE7FC66D0
     nfe: 8
     video_shift: 12.0
     audio_shift: 3.0
@@ -149,12 +155,14 @@ catalog:
     lora_scale: 1.0
     megapixels: 1.0
     backend: comfy_pruned
-    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Quality/memory compromise. Automatically uses the local pruned ComfyUI backend. SHA256 58DD5EF840E9815CDE61E24FA709257458E46994738233AFC9DDF22CE7FC66D0.
+    notes: Civitai 3315815; 4-8 NFE (8 recommended), Euler/simple. Quality/memory compromise. Automatically uses the local pruned ComfyUI backend.
 
   - id: dasiwa_multistep_r512_pruned
     name: Dasiwa FL2VA Turbo Multistep v1 r512 (pruned)
     repo: null
     filename: minimax_h3_fl2va_bf16_turbo_multistep_fro099_r512_pruned.safetensors
+    download_url: https://civitai.red/api/download/models/3315815?fileId=3201336
+    sha256: 70F1A59B130162CB15E5D9DB8ACFA227A4C460405ED31882B215A570E1BCBCD2
     nfe: 8
     video_shift: 12.0
     audio_shift: 3.0
@@ -162,4 +170,4 @@ catalog:
     lora_scale: 1.0
     megapixels: 1.0
     backend: comfy_pruned
-    notes: Civitai 3315815; highest-quality and largest rank, 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend. SHA256 70F1A59B130162CB15E5D9DB8ACFA227A4C460405ED31882B215A570E1BCBCD2.
+    notes: Civitai 3315815; highest-quality and largest rank, 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend.

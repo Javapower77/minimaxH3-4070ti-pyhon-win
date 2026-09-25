@@ -68,12 +68,47 @@ application validates this boundary and routes the catalog entry automatically.
 Install only the default TaoMate LoRA:
 
 ```powershell
-.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
-  --loras --lora-id taomate_fl2va_3step_ema
+.\.venv\Scripts\python.exe scripts\download_models.py --type taomate
 ```
 
 See [docs/LORA.md](docs/LORA.md#taomate-fl2va-3-step-ema-default-12-gb-profile)
 for compatibility, file provenance, and tuning details.
+
+## Download models by type
+
+`scripts/download_models.py` is the single online downloader. Pass `--type`
+to choose which weights to fetch. With no flags it downloads the 12 GB set
+(`pruned` + `postprocess` + `taomate`). Catalog ids such as
+`taomate_fl2va_3step_ema` also work.
+
+| `--type` | Downloads |
+| --- | --- |
+| `12gb` | Pruned FP8 transformer, NVFP4 text encoder, VAEs, Real-ESRGAN, RIFE, CodeFormer, TaoMate LoRA (default) |
+| `pruned` | Comfy-Org MiniMax-H3 pruned transformer, text encoder, video/audio VAEs |
+| `postprocess` | Real-ESRGAN x4plus, RIFE 4.25 Lite, CodeFormer, face-detection, ParseNet |
+| `backend` | `pruned` + `postprocess` |
+| `taomate` | Default compact TaoMate Civitai LoRA |
+| `silveroxides` | Silveroxides DARE-TIES pruned v1 Hugging Face LoRA |
+| `dasiwa` | Dasiwa Civitai ranks 48 / 96 / 144 / 512 |
+| `lightx2v` | Official LightX2V / larryvrh turbo LoRAs |
+| `loras` | Every catalogued LoRA that has a download source |
+| `base` | Full Diffusers FL2VA snapshot (`models/MiniMax-H3`) |
+| `h100` | Diffusers base + all catalog LoRAs |
+| `all` | Pruned weights, post-process assets, and all catalog LoRAs |
+
+```powershell
+.\.venv\Scripts\python.exe scripts\download_models.py --type 12gb
+.\.venv\Scripts\python.exe scripts\download_models.py --type pruned
+.\.venv\Scripts\python.exe scripts\download_models.py --type dasiwa
+```
+
+```bash
+python scripts/download_models.py --type 12gb
+python scripts/download_models.py --type h100
+```
+
+Legacy `--base`, `--loras`, `--lora-id`, and `--all` still work. `--all` is
+an H100 alias (`base` + `loras`), not the 12 GB default.
 
 The optional Silveroxides DARE-TIES pruned v1 adapter
 (`silveroxides_dareties_pruned_v1`) is the same pruned AdaLN-8 architecture and
@@ -81,8 +116,7 @@ also routes to the ComfyUI backend. Use 8 NFE, strength 0.9, and 0.5 MP
 (960×544). Do not select the 829 MB `full_v1` sibling. Download it with:
 
 ```powershell
-.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
-  --loras --lora-id silveroxides_dareties_pruned_v1
+.\.venv\Scripts\python.exe scripts\download_models.py --type silveroxides
 ```
 
 ## What FL2VA does
@@ -122,7 +156,7 @@ bash scripts/azure_h100_setup.sh
 bash scripts/setup_venv.sh
 source .venv/bin/activate
 cp .env.example .env          # HF_TOKEN is only for this download step
-python scripts/download_models.py --all   # last online step
+python scripts/download_models.py --type h100   # last online step: Diffusers base + LoRAs
 python scripts/smoke_test.py
 python app.py                 # Gradio stays local → http://<vm-ip>:7860
 ```
@@ -188,7 +222,7 @@ downloads are required, run:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\setup_pruned_backend.py
-.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download --loras --lora-id taomate_fl2va_3step_ema
+.\.venv\Scripts\python.exe scripts\download_models.py --type taomate
 ```
 
 Do not run the setup with an activated Python 3.14 environment. The script
@@ -222,7 +256,7 @@ pip install --upgrade pip
 pip install torch==2.11.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 python scripts/setup_pruned_backend.py
-python -m minimax_h3_fl2v.download --loras --lora-id taomate_fl2va_3step_ema
+python scripts/download_models.py --type taomate
 python app.py
 ```
 

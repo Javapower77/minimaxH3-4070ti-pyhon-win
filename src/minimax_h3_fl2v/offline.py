@@ -107,13 +107,13 @@ def require_local_snapshot(local_dir: Path) -> Path:
         raise FileNotFoundError(
             f"Local MiniMax-H3 snapshot not found at {root}. "
             "This app is offline-only and will not pull from Hugging Face. "
-            "While you have network access, run: python scripts/download_models.py --base"
+            "While you have network access, run: python scripts/download_models.py --type base"
         )
     missing_dirs = [name for name in REQUIRED_SNAPSHOT_DIRS if not (root / name).exists()]
     if missing_dirs:
         raise FileNotFoundError(
             f"Incomplete local snapshot at {root}: missing {', '.join(missing_dirs)}. "
-            "Re-run: python scripts/download_models.py --base"
+            "Re-run: python scripts/download_models.py --type base"
         )
     return root
 

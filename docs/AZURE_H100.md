@@ -88,7 +88,7 @@ torch 2.x+cu128   cuda True   device NVIDIA H100   bf16 True   capability 9.0
 ```bash
 cp .env.example .env
 # optional: HF_TOKEN=hf_...
-python scripts/download_models.py --all
+python scripts/download_models.py --type h100
 ```
 
 The downloader **skips** `transformer_ref/` (~62 GB, Ref2VA only). This

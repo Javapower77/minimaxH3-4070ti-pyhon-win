@@ -106,8 +106,7 @@ those components through the 4070 Ti while keeping staged weights in system RAM.
 Download and verify the adapter:
 
 ```powershell
-.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
-  --loras --lora-id taomate_fl2va_3step_ema
+.\.venv\Scripts\python.exe scripts\download_models.py --type taomate
 ```
 
 Install or repair the complete pruned backend and post-processing assets:
@@ -157,8 +156,7 @@ the 12 GB pruned backend.
 Download and verify the adapter:
 
 ```powershell
-.\.venv\Scripts\python.exe -m minimax_h3_fl2v.download `
-  --loras --lora-id silveroxides_dareties_pruned_v1
+.\.venv\Scripts\python.exe scripts\download_models.py --type silveroxides
 ```
 
 Compatibility rules:
@@ -178,6 +176,18 @@ AdaLN patches. Selecting one automatically routes generation to the isolated
 local ComfyUI backend and its matching
 `minimax_h3_fl2va_pruned_bf16.safetensors` base. Standard catalog entries keep
 using the original Diffusers backend.
+
+Download all four ranks:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\download_models.py --type dasiwa
+```
+
+Download a single rank with its catalog id:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\download_models.py --type dasiwa_multistep_r48_pruned
+```
 
 Install or repair this backend while online with:
 

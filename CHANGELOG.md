@@ -7,6 +7,9 @@ uses date-based development entries because no tagged release series exists yet.
 
 ### Unreleased additions
 
+- Typed model downloader `scripts/download_models.py --type …` covering pruned
+  ComfyUI weights, post-process assets, catalog LoRAs (TaoMate, Silveroxides,
+  Dasiwa, LightX2V), Diffusers FL2VA, and the `12gb` / `h100` profiles.
 - Dedicated documentation for the default TaoMate FL2VA 3-step EMA avg-rank-19
   LoRA, including provenance, checksum, backend compatibility, and recommended
   RTX 4070 Ti settings.

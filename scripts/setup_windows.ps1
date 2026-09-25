@@ -55,10 +55,10 @@ if (-not $SkipModelDownload) {
     Write-Host 'Installing ComfyUI and downloading the low-memory model files...'
     & $AppPython @backendArgs
     Write-Host 'Downloading and validating the TaoMate LoRA...'
-    & $AppPython -m minimax_h3_fl2v.download --loras --lora-id taomate_fl2va_3step_ema
+    & $AppPython 'scripts/download_models.py' --type taomate
     if ($IncludeFullDiffusersBase) {
         Write-Host 'Downloading the optional full Diffusers FL2VA snapshot...'
-        & $AppPython -m minimax_h3_fl2v.download --base
+        & $AppPython 'scripts/download_models.py' --type base
     }
 }
 

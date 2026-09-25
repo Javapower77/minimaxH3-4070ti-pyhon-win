@@ -43,8 +43,11 @@ restarting. `app.py` also sets
 Inference never falls back to Hugging Face. Download once while online:
 
 ```bash
-python scripts/download_models.py --all
+python scripts/download_models.py --type h100
 ```
+
+For the 12 GB ComfyUI path, use `--type 12gb` or `--type pruned` instead of
+the full Diffusers snapshot.
 
 Confirm `models/MiniMax-H3/modular_model_index.json` (or `model_index.json`)
 and the `transformer/`, `text_encoder/`, `vae/` folders exist.
@@ -60,7 +63,7 @@ you still see Hub errors:
 - Diffusers must be installed **from git main** (`requirements.txt`).
 - `python -c "import diffusers; print(diffusers.__version__)"` should be a
   recent `0.36.dev` / main build that includes `MiniMaxH3Blocks`.
-- Re-run `python scripts/download_models.py --base`.
+- Re-run `python scripts/download_models.py --type base`.
 
 ## `LoRA checkpoint is not a Diffusers PEFT LoRA`
 
@@ -75,7 +78,8 @@ not `*_comfyui_*.safetensors`.
 ## `LoRA file missing`
 
 ```bash
-python scripts/download_models.py --loras --lora-id fl2va_turbo_8step_768p
+python scripts/download_models.py --type lightx2v
+python scripts/download_models.py --type fl2va_turbo_8step_768p
 ```
 
 If Hub returns 404, the filename may have moved. Check

@@ -313,7 +313,7 @@ class MiniMaxH3Engine:
             path = spec.resolved_path(self.config.lora_dir)
             if path is None or not path.is_file():
                 raise FileNotFoundError(
-                    f"LoRA file missing: {path}. Run: python scripts/download_models.py --loras"
+                    f"LoRA file missing: {path}. Run: python scripts/download_models.py --type loras"
                 )
             desired["turbo"] = path.expanduser().resolve()
             weights["turbo"] = float(turbo_scale)
