@@ -50,7 +50,11 @@ def test_type_backend_is_pruned_plus_postprocess():
 
 
 def test_aliases_and_catalog_ids():
-    catalog_ids = ("taomate_fl2va_3step_ema", "silveroxides_dareties_pruned_v1")
+    catalog_ids = (
+        "taomate_fl2va_3step_ema",
+        "silveroxides_dareties_pruned_v1",
+        "dasiwa_multistep_v2_r128_pruned",
+    )
     assert resolve_types(
         model_type="silveroxides_dareties_pruned_v1",
         base=False,
@@ -72,11 +76,45 @@ def test_aliases_and_catalog_ids():
         all_flag=False,
         catalog_ids=("dasiwa_multistep_r48_pruned",),
     ) == ["dasiwa_multistep_r48_pruned"]
+    assert resolve_types(
+        model_type="dasiwa_multistep_v2_r128_pruned",
+        base=False,
+        loras=False,
+        all_flag=False,
+        catalog_ids=catalog_ids,
+    ) == ["dasiwa_v2"]
+    assert resolve_types(
+        model_type="dasiwa_v2",
+        base=False,
+        loras=False,
+        all_flag=False,
+        catalog_ids=catalog_ids,
+    ) == ["dasiwa_v2"]
 
 
 def test_unknown_type_raises():
     with pytest.raises(ValueError, match="Unknown model type: not_a_model"):
         resolve_types(model_type="not_a_model", base=False, loras=False, all_flag=False)
+
+
+def test_dmad_type_and_original_checkpoint_download(monkeypatch, tmp_path):
+    cfg = load_config()
+    cfg.lora_dir = tmp_path
+    assert LORA_GROUPS["dmad"] == ("dmad_4step_lora_critic",)
+    assert resolve_types(model_type="dmad", base=False, loras=False, all_flag=False) == ["dmad"]
+    assert resolve_types(model_type="dmad_4step_lora_critic", base=False, loras=False,
+                         all_flag=False, catalog_ids=("dmad_4step_lora_critic",)) == ["dmad_4step_lora_critic"]
+    captured = []
+
+    def fake_download(url, destination, *, expected_sha256=None):
+        captured.append((url, expected_sha256))
+        destination.write_bytes(b"original")
+        return destination
+
+    monkeypatch.setattr("minimax_h3_fl2v.download.download_url_file", fake_download)
+    spec = cfg.lora_by_id("dmad_4step_lora_critic")
+    assert download_loras(cfg, ids=[spec.id]) == [tmp_path / spec.filename]
+    assert captured == [(spec.download_url, spec.sha256)]
 
 
 def test_dasiwa_group_contains_all_ranks():
@@ -86,6 +124,28 @@ def test_dasiwa_group_contains_all_ranks():
         "dasiwa_multistep_r144_pruned",
         "dasiwa_multistep_r512_pruned",
     )
+    assert LORA_GROUPS["dasiwa_v2"] == ("dasiwa_multistep_v2_r128_pruned",)
+
+
+def test_dmad_hyperflow_type_downloads_only_new_blend(monkeypatch, tmp_path):
+    cfg = load_config()
+    cfg.lora_dir = tmp_path
+    spec = cfg.lora_by_id("dasiwa_dmad_hyperflow_4step_r256")
+    assert LORA_GROUPS["dmad_hyperflow"] == (spec.id,)
+    assert LORA_GROUPS["dmad"] == ("dmad_4step_lora_critic",)
+    assert resolve_types(model_type="dmad_hyperflow", base=False, loras=False, all_flag=False) == ["dmad_hyperflow"]
+    assert resolve_types(model_type=spec.id, base=False, loras=False, all_flag=False,
+                         catalog_ids=(spec.id,)) == [spec.id]
+    captured = []
+
+    def fake_download(url, destination, *, expected_sha256=None):
+        captured.append((url, expected_sha256))
+        destination.write_bytes(b"blend")
+        return destination
+
+    monkeypatch.setattr("minimax_h3_fl2v.download.download_url_file", fake_download)
+    assert download_loras(cfg, ids=list(LORA_GROUPS["dmad_hyperflow"])) == [tmp_path / spec.filename]
+    assert captured == [(spec.download_url, spec.sha256)]
 
 
 def test_download_url_file_skips_existing_checksum(tmp_path: Path):
@@ -118,3 +178,21 @@ def test_download_loras_uses_dasiwa_civitai_url(monkeypatch, tmp_path: Path):
     assert captured == [spec.download_url]
     assert paths == [tmp_path / spec.filename]
     assert spec.download_url.endswith("fileId=3201294")
+
+
+def test_download_loras_uses_dasiwa_v2_civitai_url(monkeypatch, tmp_path: Path):
+    cfg = load_config()
+    cfg.lora_dir = tmp_path
+    captured: list[str] = []
+
+    def fake_download(url, destination, *, expected_sha256=None, expected_size=None):
+        captured.append(url)
+        destination.write_bytes(b"lora")
+        return destination
+
+    monkeypatch.setattr("minimax_h3_fl2v.download.download_url_file", fake_download)
+    paths = download_loras(cfg, ids=["dasiwa_multistep_v2_r128_pruned"])
+    spec = cfg.lora_by_id("dasiwa_multistep_v2_r128_pruned")
+    assert captured == [spec.download_url]
+    assert paths == [tmp_path / spec.filename]
+    assert spec.download_url.endswith("fileId=3245274")

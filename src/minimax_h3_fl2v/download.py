@@ -61,6 +61,9 @@ MODEL_TYPES = (
     "taomate",
     "silveroxides",
     "dasiwa",
+    "dasiwa_v2",
+    "dmad",
+    "dmad_hyperflow",
     "lightx2v",
     "12gb",
     "h100",
@@ -76,6 +79,9 @@ LORA_GROUPS = {
         "dasiwa_multistep_r144_pruned",
         "dasiwa_multistep_r512_pruned",
     ),
+    "dasiwa_v2": ("dasiwa_multistep_v2_r128_pruned",),
+    "dmad": ("dmad_4step_lora_critic",),
+    "dmad_hyperflow": ("dasiwa_dmad_hyperflow_4step_r256",),
     "lightx2v": (
         "fl2va_turbo_8step_768p",
         "fl2va_turbo_4step_768p",
@@ -88,6 +94,7 @@ LORA_GROUPS = {
 TYPE_ALIASES = {
     "silveroxides_dareties_pruned_v1": "silveroxides",
     "taomate_fl2va_3step_ema": "taomate",
+    "dasiwa_multistep_v2_r128_pruned": "dasiwa_v2",
 }
 
 
@@ -396,7 +403,10 @@ Model types:
   loras          every catalogued LoRA with a download source
   taomate        default 12 GB TaoMate Civitai LoRA
   silveroxides   Silveroxides DARE-TIES pruned v1 Hugging Face LoRA
-  dasiwa         Dasiwa Civitai ranks 48/96/144/512
+  dasiwa         Dasiwa Civitai v1 ranks 48/96/144/512
+    dasiwa_v2      Dasiwa turbo-multistep-v2 Hyperflow+EMA600 pruned r128
+    dmad           Original DMAD 4-step lora_critic (not full_critic)
+    dmad_hyperflow  Dasiwa DMAD + Hyperflow 4-step r256 Civitai blend
   lightx2v       official LightX2V / larryvrh turbo LoRAs
   12gb           pruned + postprocess + TaoMate (default)
   h100           Diffusers base + all catalog LoRAs

@@ -7,9 +7,26 @@ uses date-based development entries because no tagged release series exists yet.
 
 ### Unreleased additions
 
+- Separate Dasiwa DMAD + Hyperflow 4-step r256 experimental catalog option
+  (`dasiwa_dmad_hyperflow_4step_r256`, Civitai 3383490 file 3272202) and
+  `--type dmad_hyperflow` download with SHA-256 verification. Uses the native
+  pruned backend, Euler/simple, 4 NFE, shifts 12/3 and 0.4 MP; leaves original
+  DMAD and TaoMate defaults unchanged. Documents Civitai authentication and
+  unverified local tensor/render compatibility.
+- Original DMAD 4-step `lora_critic` as a separate experimental FL2VA catalog
+  option and `--type dmad` download, preserving TaoMate as default. Includes
+  lossless cached Diffusers-to-native conversion, independent QKV rank fusion,
+  FFN gate reordering, and coherent video/audio shifts 12/2. Uses Euler/simple,
+  not the paper's re-noise sampler; does not substitute Civitai's `full_critic`.
 - Typed model downloader `scripts/download_models.py --type …` covering pruned
   ComfyUI weights, post-process assets, catalog LoRAs (TaoMate, Silveroxides,
-  Dasiwa, LightX2V), Diffusers FL2VA, and the `12gb` / `h100` profiles.
+  Dasiwa v1 ranks, Dasiwa turbo-multistep-v2, LightX2V), Diffusers FL2VA, and
+  the `12gb` / `h100` profiles.
+- Catalogued Dasiwa FL2VA turbo-multistep-v2 Hyperflow+EMA600 pruned r128
+  (`dasiwa_multistep_v2_r128_pruned`, Civitai 3357658 file 3245274, SHA-256
+  `C27839218F19CF444F0D2EAFCA38C1B64A48FC30CE02AEEF94CA5804CEA6ECB7`). Download
+  with `--type dasiwa_v2`. Default remaining 8 NFE / 1.0 MP on the isolated
+  pruned ComfyUI backend. FL2VA only.
 - Dedicated documentation for the default TaoMate FL2VA 3-step EMA avg-rank-19
   LoRA, including provenance, checksum, backend compatibility, and recommended
   RTX 4070 Ti settings.

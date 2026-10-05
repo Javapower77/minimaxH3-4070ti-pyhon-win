@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from minimax_h3_fl2v.config import AppConfig, LoRASpec
+from minimax_h3_fl2v.config import AppConfig, LoRASpec, load_config
 from minimax_h3_fl2v.ui import (
     _ChunkedUploadPreviewMiddleware,
     MAX_SEED,
     _lora_guidance,
+    _lora_choices,
     _lora_slot_updates,
     _recommended_reset_values,
     _resolve_seed,
@@ -12,6 +13,18 @@ from minimax_h3_fl2v.ui import (
     _selected_extra_loras,
     _stored_lora_choices,
 )
+
+
+def test_dmad_is_selectable_in_catalog():
+    cfg = load_config()
+    choices = _lora_choices(cfg)
+    assert any(value == "dmad_4step_lora_critic" and "experimental" in label for label, value in choices)
+
+
+def test_dmad_hyperflow_is_separately_selectable_in_catalog():
+    choices = _lora_choices(load_config())
+    assert any(value == "dasiwa_dmad_hyperflow_4step_r256" and "Hyperflow" in label for label, value in choices)
+    assert any(value == "dmad_4step_lora_critic" for _, value in choices)
 
 
 def test_upload_preview_middleware_removes_stale_content_length():

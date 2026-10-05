@@ -256,6 +256,8 @@ class PrunedComfyBackend:
         face_restore: bool = False,
         face_restore_model: str = DEFAULT_FACE_RESTORE_MODEL,
         face_fidelity: float = 0.7,
+        video_shift: float = 12.0,
+        audio_shift: float = 3.0,
     ) -> dict[str, dict[str, Any]]:
         image_node = "16"
         graph: dict[str, dict[str, Any]] = {
@@ -349,6 +351,12 @@ class PrunedComfyBackend:
                 "inputs": {"model": [model_node, 0], "lora_name": filename, "strength_model": float(strength)},
             }
             model_node = node
+        if video_shift != 12.0 or audio_shift != 3.0:
+            graph["40"] = {
+                "class_type": "MiniMaxH3SigmaShift",
+                "inputs": {"model": [model_node, 0], "shift_video": float(video_shift), "shift_audio": float(audio_shift)},
+            }
+            model_node = "40"
         graph["12"] = {"class_type": "BasicScheduler", "inputs": {"model": [model_node, 0], "scheduler": "simple", "steps": int(nfe), "denoise": 1.0}}
         graph["13"] = {"class_type": "BasicGuider", "inputs": {"model": [model_node, 0], "conditioning": ["9", 0]}}
         graph["15"] = {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["10", 0], "guider": ["13", 0], "sampler": ["11", 0], "sigmas": ["12", 0], "latent_image": ["9", 1]}}
@@ -498,8 +506,16 @@ class PrunedComfyBackend:
             face_model = self.root / "models" / "facerestore_models" / self.face_restore_model
             if not face_model.is_file():
                 raise FileNotFoundError(f"Face restoration model missing: {face_model}")
-        selected_loras = [(spec.filename, float(request.lora_scale))]
-        selected_paths = [spec.resolved_path(self.config.lora_dir)]
+        selected_path = spec.resolved_path(self.config.lora_dir)
+        if spec.lora_format == "dmad_diffusers":
+            from .dmad import prepare_dmad_lora
+
+            if selected_path is None:
+                raise ValueError("DMAD catalog entry requires a checkpoint path")
+            report(0.06, "🧬 Preparing original DMAD adapter for the native H3 worker…")
+            selected_path = prepare_dmad_lora(selected_path, self.config.lora_dir / ".converted")
+        selected_loras = [(selected_path.name if selected_path else spec.filename, float(request.lora_scale))]
+        selected_paths = [selected_path]
         for path, scale in request.extra_loras:
             validate_pruned_fl2va_lora(Path(path))
             selected_loras.append((Path(path).name, float(scale)))
@@ -523,6 +539,8 @@ class PrunedComfyBackend:
             face_restore=request.face_restore,
             face_restore_model=self.face_restore_model,
             face_fidelity=request.face_fidelity,
+            video_shift=spec.video_shift if request.video_shift is None else request.video_shift,
+            audio_shift=spec.audio_shift if request.audio_shift is None else request.audio_shift,
         )
         started = time.perf_counter()
         report(0.08, "📤 Submitting pruned workflow to local worker…")

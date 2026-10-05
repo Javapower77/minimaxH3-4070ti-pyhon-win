@@ -70,3 +70,18 @@ def test_civitai_multistep_ranks_are_catalogued():
         assert "pruned ComfyUI backend" in spec.notes
         assert spec.download_url.endswith(f"fileId={file_ids[lora_id]}")
         assert spec.sha256 == hashes[lora_id]
+
+
+def test_dasiwa_multistep_v2_is_catalogued():
+    cfg = load_config()
+    spec = cfg.lora_by_id("dasiwa_multistep_v2_r128_pruned")
+    assert spec.filename == "minimax_h3_hyperflow_EMA600_pruned_r128_fro0995_turbo_lora.safetensors"
+    assert spec.download_url.endswith("fileId=3245274")
+    assert spec.sha256 == "C27839218F19CF444F0D2EAFCA38C1B64A48FC30CE02AEEF94CA5804CEA6ECB7"
+    assert spec.nfe == 8
+    assert spec.lora_alpha == 128
+    assert spec.lora_scale == 1.0
+    assert spec.megapixels == 1.0
+    assert spec.backend == "comfy_pruned"
+    assert "3357658" in spec.notes
+    assert "FL2VA" in spec.notes

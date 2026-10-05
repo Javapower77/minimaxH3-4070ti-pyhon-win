@@ -104,6 +104,13 @@ def validate_pruned_fl2va_lora(path: Path) -> None:
     with safe_open(str(Path(path).expanduser().resolve()), framework="pt", device="cpu") as checkpoint:
         for key in checkpoint.keys():
             lower = key.lower()
+            module_key = key.removeprefix("transformer.").removeprefix("diffusion_model.")
+            if module_key.startswith(("transformer_blocks.", "token_refiner.refiner_blocks.")):
+                raise ValueError(
+                    f"{path.name} uses Diffusers module names, not native pruned H3 keys. "
+                    "For the original DMAD lora_critic, select its catalog option so the app "
+                    "converts it automatically; do not stack the unconverted file as an extra."
+                )
             if "adaln" not in lower or not (
                 key.endswith(".lora_A.weight")
                 or key.endswith(".lora_down.weight")

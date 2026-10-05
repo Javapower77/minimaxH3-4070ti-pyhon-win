@@ -89,7 +89,10 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 | `backend` | `pruned` + `postprocess` |
 | `taomate` | Default compact TaoMate Civitai LoRA |
 | `silveroxides` | Silveroxides DARE-TIES pruned v1 Hugging Face LoRA |
-| `dasiwa` | Dasiwa Civitai ranks 48 / 96 / 144 / 512 |
+| `dasiwa` | Dasiwa Civitai v1 ranks 48 / 96 / 144 / 512 |
+| `dasiwa_v2` | Dasiwa turbo-multistep-v2 Hyperflow+EMA600 pruned r128 |
+| `dmad` | Original DMAD 4-step lora_critic r128; experimental FL2VA transfer |
+| `dmad_hyperflow` | Dasiwa DMAD + Hyperflow 4-step r256 blend (Civitai 3383490) |
 | `lightx2v` | Official LightX2V / larryvrh turbo LoRAs |
 | `loras` | Every catalogued LoRA that has a download source |
 | `base` | Full Diffusers FL2VA snapshot (`models/MiniMax-H3`) |
@@ -100,7 +103,27 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 .\.venv\Scripts\python.exe scripts\download_models.py --type 12gb
 .\.venv\Scripts\python.exe scripts\download_models.py --type pruned
 .\.venv\Scripts\python.exe scripts\download_models.py --type dasiwa
+.\.venv\Scripts\python.exe scripts\download_models.py --type dasiwa_v2
+.\.venv\Scripts\python.exe scripts\download_models.py --type dmad
+.\.venv\Scripts\python.exe scripts\download_models.py --type dmad_hyperflow
 ```
+
+The **DMAD 4-step lora_critic** option uses the original paper checkpoint from
+`ZhengmingYu/DMAD`, not the linked Civitai `full_critic` variant. The app retains
+the original (~1.29 GiB) and caches a lossless native-key conversion for ComfyUI
+under `models/loras/.converted/` (about 2.0 GiB additional disk space). Start
+without reference frames at 4 NFE, strength 1.0, 0.4 MP. This is experimental
+T2VA-to-FL2VA transfer using Euler/simple with video/audio shifts 12/2; it does
+not reproduce DMAD's paper re-noise sampler. See [LoRA details](docs/LORA.md).
+
+The separate **Dasiwa DMAD + Hyperflow 4-step r256 (experimental)** option
+uses Civitai version `3383490`, file `3272202` (~1.30 GiB). It routes directly
+to the pruned ComfyUI backend without the original DMAD conversion. Defaults:
+4 NFE, strength 1.0, video/audio shifts 12/3, Euler/simple, 0.4 MP. The creator
+also suggests Euler/beta; this app uses simple. Tensor layout and generation
+quality have not been validated locally. If Civitai returns HTTP 401, download
+while signed in and place the exact catalog filename in `models/loras/`, then
+rerun `--type dmad_hyperflow` to verify its SHA-256. `--type dmad` is unchanged.
 
 ```bash
 python scripts/download_models.py --type 12gb

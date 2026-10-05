@@ -45,6 +45,52 @@ def test_pruned_workflow_accepts_configured_models():
     assert graph["2"]["inputs"]["clip_name"] == "custom-nvfp4.safetensors"
 
 
+def test_dmad_workflow_sets_coherent_video_and_audio_shifts():
+    graph = PrunedComfyBackend.build_workflow(
+        prompt="test", width=864, height=480, frames=124, seed=42, nfe=4,
+        loras=[("dmad-native.safetensors", 1.0)], video_shift=12.0, audio_shift=2.0,
+    )
+    assert graph["40"]["class_type"] == "MiniMaxH3SigmaShift"
+    assert graph["40"]["inputs"] == {"model": ["21", 0], "shift_video": 12.0, "shift_audio": 2.0}
+    assert graph["12"]["inputs"]["model"] == ["40", 0]
+    assert graph["13"]["inputs"]["model"] == ["40", 0]
+    assert graph["12"]["inputs"]["steps"] == 4
+
+
+def test_dmad_generation_converts_and_syncs_native_checkpoint(tmp_path, monkeypatch):
+    from minimax_h3_fl2v.config import load_config
+
+    cfg = load_config()
+    cfg.lora_dir = tmp_path
+    spec = cfg.lora_by_id("dmad_4step_lora_critic")
+    original = tmp_path / spec.filename
+    native = tmp_path / ".converted" / "dmad-native.safetensors"
+    native.parent.mkdir()
+    original.write_bytes(b"original")
+    native.write_bytes(b"converted")
+    backend = PrunedComfyBackend(cfg)
+    monkeypatch.setattr(backend, "ensure_worker", lambda **kwargs: None)
+
+    def convert(path, cache):
+        assert path == original
+        assert cache == native.parent
+        return native
+
+    def sync(paths):
+        assert paths == [native]
+
+    def build(**kwargs):
+        assert kwargs["loras"] == [(native.name, 1.0)]
+        assert (kwargs["video_shift"], kwargs["audio_shift"], kwargs["nfe"]) == (12, 2, 4)
+        raise RuntimeError("stop before submitting GPU job")
+
+    monkeypatch.setattr("minimax_h3_fl2v.dmad.prepare_dmad_lora", convert)
+    monkeypatch.setattr(backend, "_sync_loras", sync)
+    monkeypatch.setattr(backend, "build_workflow", build)
+    with pytest.raises(RuntimeError, match="stop before submitting"):
+        backend.generate(GenerationRequest(prompt="test", lora_id=spec.id, nfe=4, megapixels=0.4), spec)
+
+
 def test_pruned_workflow_adds_tiled_upscale_and_detailer():
     graph = PrunedComfyBackend.build_workflow(
         prompt="test",
@@ -173,6 +219,33 @@ def test_pruned_catalog_routes_without_loading_diffusers(monkeypatch):
         lambda self, request, selected, progress_callback=None: expected,
     )
     assert engine.generate(GenerationRequest(prompt="test", lora_id="pruned")) is expected
+
+
+def test_dmad_hyperflow_generation_uses_native_file_without_original_converter(tmp_path, monkeypatch):
+    from minimax_h3_fl2v.config import load_config
+
+    cfg = load_config()
+    cfg.lora_dir = tmp_path
+    spec = cfg.lora_by_id("dasiwa_dmad_hyperflow_4step_r256")
+    source = tmp_path / spec.filename
+    source.write_bytes(b"native blend")
+    backend = PrunedComfyBackend(cfg)
+    monkeypatch.setattr(backend, "ensure_worker", lambda **kwargs: None)
+    monkeypatch.setattr("minimax_h3_fl2v.dmad.prepare_dmad_lora",
+                        lambda *args: pytest.fail("Original DMAD converter must not run for the blend"))
+
+    def sync(paths):
+        assert paths == [source]
+
+    def build(**kwargs):
+        assert kwargs["loras"] == [(spec.filename, 1.0)]
+        assert (kwargs["video_shift"], kwargs["audio_shift"], kwargs["nfe"]) == (12, 3, 4)
+        raise RuntimeError("stop before GPU submission")
+
+    monkeypatch.setattr(backend, "_sync_loras", sync)
+    monkeypatch.setattr(backend, "build_workflow", build)
+    with pytest.raises(RuntimeError, match="stop before GPU submission"):
+        backend.generate(GenerationRequest(prompt="test", lora_id=spec.id, nfe=4, megapixels=0.4), spec)
 
 
 def test_sync_loras_links_new_files_and_checks_live_discovery(tmp_path, monkeypatch):

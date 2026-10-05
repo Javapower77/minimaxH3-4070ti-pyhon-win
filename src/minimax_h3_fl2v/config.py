@@ -49,6 +49,7 @@ class LoRASpec:
     backend: str = "diffusers"
     download_url: Optional[str] = None
     sha256: Optional[str] = None
+    lora_format: str = "native"
 
     @property
     def is_base(self) -> bool:
@@ -182,6 +183,7 @@ def load_lora_catalog(path: Path = DEFAULT_LORA_CATALOG_PATH) -> list[LoRASpec]:
                 backend=str(item.get("backend", "diffusers")),
                 download_url=item.get("download_url"),
                 sha256=item.get("sha256"),
+                lora_format=str(item.get("lora_format", "native")),
             )
         )
     return catalog

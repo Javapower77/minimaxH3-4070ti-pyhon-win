@@ -1,5 +1,5 @@
-# Catalog of Diffusers PEFT LoRAs (*.safetensors).
-# Do NOT mix ComfyUI-named files here — those use a different key layout.
+# Catalog of LoRAs (*.safetensors), routed by backend and lora_format.
+# ComfyUI-native entries must explicitly select backend: comfy_pruned.
 # Official LightX2V files: https://huggingface.co/lightx2v/Minimax-h3-Turbo
 
 catalog:
@@ -171,3 +171,57 @@ catalog:
     megapixels: 1.0
     backend: comfy_pruned
     notes: Civitai 3315815; highest-quality and largest rank, 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend.
+
+  # Civitai model version 3357658 (turbo-multistep-v2). Hyperflow 1.0 + EMA600
+  # blend with a recalculated pruned r128 extraction. FL2VA compatible; routes
+  # to the isolated ComfyUI backend. This studio does not run Ref2VA.
+  - id: dasiwa_multistep_v2_r128_pruned
+    name: Dasiwa FL2VA Turbo Multistep v2 Hyperflow+EMA600 r128 (pruned)
+    repo: null
+    filename: minimax_h3_hyperflow_EMA600_pruned_r128_fro0995_turbo_lora.safetensors
+    download_url: https://civitai.red/api/download/models/3357658?fileId=3245274
+    sha256: C27839218F19CF444F0D2EAFCA38C1B64A48FC30CE02AEEF94CA5804CEA6ECB7
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 128
+    lora_scale: 1.0
+    megapixels: 1.0
+    backend: comfy_pruned
+    notes: Civitai 3357658 turbo-multistep-v2; Hyperflow + EMA600, pruned r128, 4-8 NFE (8 recommended), Euler/simple. Automatically uses the local pruned ComfyUI backend. FL2VA only in this studio.
+
+  # Original paper checkpoint, NOT Civitai 3382801's full_critic variant.
+  # Preserve the original and convert its Diffusers factors at generation time.
+  - id: dmad_4step_lora_critic
+    name: DMAD 4-step lora_critic r128 (experimental FL2VA transfer)
+    repo: null
+    filename: dmad_minimax_h3_4step_lora_critic.safetensors
+    download_url: https://huggingface.co/ZhengmingYu/DMAD/resolve/2cb62f3d699c0afabb4459216db78d76fc801e35/minimax_h3/dmad_minimax_h3_4step_lora_critic.safetensors
+    sha256: 61D0865D6BF426E328CAEAB6610A28A677C68E9F2F04C607657C6451E38B5980
+    nfe: 4
+    video_shift: 12.0
+    audio_shift: 2.0
+    lora_alpha: 128
+    lora_scale: 1.0
+    megapixels: 0.4
+    backend: comfy_pruned
+    lora_format: dmad_diffusers
+    notes: Original Yzmblog/DMAD paper lora_critic checkpoint (EMA iteration 800), not full_critic. Rank 128; automatic lossless native-key conversion. Experimental T2VA-to-FL2VA transfer; start without reference frames. 4 NFE, strength 1.0, video/audio shifts 12/2, Euler/simple (upstream alternative, NOT the paper's re-noise sampler). Reduced 0.4 MP for 12 GB; frame conditioning and rendered quality are unverified.
+
+  # Separate community DMAD + Hyperflow blend; not the original paper LoRA.
+  # Uses the existing native pruned workflow, not the original DMAD converter.
+  - id: dasiwa_dmad_hyperflow_4step_r256
+    name: Dasiwa DMAD + Hyperflow 4-step r256 (experimental)
+    repo: null
+    filename: minimax_h3_DMAD_Hyperflow_4step_r256_add_fro0995_turbo_lora.safetensors
+    download_url: https://civitai.red/api/download/models/3383490?fileId=3272202
+    sha256: 3D6B77D9A3775DA27CC0057D41DC0DF339E2707D6E941A072C8FEB291CB29920
+    nfe: 4
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 256
+    lora_scale: 1.0
+    megapixels: 0.4
+    backend: comfy_pruned
+    lora_format: native
+    notes: Civitai 3383490 turbo-4step-DH-v1, file 3272202; Darksidewalker DMAD + Hyperflow blend using Silveroxides extraction, BF16 r256 Fro0.995. Experimental; uses native pruned ComfyUI loading, not the original DMAD converter. Creator recommends 4 steps (possibly more), Euler/simple or Euler/beta, shifts 12/3; app uses Euler/simple, strength 1.0 and reduced 0.4 MP for 12 GB. FL2VA only in this studio. Tensor layout and rendered quality are unverified locally; Civitai may require authenticated manual download.
