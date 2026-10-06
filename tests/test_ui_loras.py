@@ -27,6 +27,12 @@ def test_dmad_hyperflow_is_separately_selectable_in_catalog():
     assert any(value == "dmad_4step_lora_critic" for _, value in choices)
 
 
+def test_pdmd_dmad_is_separately_selectable_in_catalog():
+    choices = _lora_choices(load_config())
+    assert any(value == "dasiwa_pdmd_dmad_4step_r256" and "PDMD" in label for label, value in choices)
+    assert any(value == "dasiwa_dmad_hyperflow_4step_r256" for _, value in choices)
+
+
 def test_upload_preview_middleware_removes_stale_content_length():
     messages = []
 
@@ -135,3 +141,11 @@ def test_reset_values_restore_zero_extra_loras():
     assert values[4] == 0
     assert values[5:10] == (None, None, None, None, None)
     assert values[15] == "Fixed"
+    assert len(values) == 36
+    assert values[23:33] == (
+        True, False, 2.0, 0.25, "23.976 fps", False, 0.7,
+        False, 1.5, "cpu",
+    )
+    assert values[33:] == (
+        "recommended", _lora_guidance(cfg, "turbo", 0), "Fixed seed will be reused.",
+    )

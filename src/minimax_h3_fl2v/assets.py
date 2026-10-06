@@ -29,6 +29,17 @@ RIFE_REPO = "Comfy-Org/frame_interpolation"
 RIFE_FILE = "frame_interpolation/rife_v4.25_lite.safetensors"
 RIFE_SHA256 = "e5e5fe0286d30708f4c36aa23639a38d3d7cd0c724922c66e6b04130ae12c6e4"
 
+LATENT_UPSCALER_FILE = "h3_upscaler_lms_v0.1.safetensors"
+LATENT_UPSCALER_URL = "https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/resolve/e25a489717c7067ed1813bbd884e64fa68b76d58/latent_upscaler/h3_upscaler_lms_v0.1.safetensors"
+LATENT_UPSCALER_SHA256 = "40d4228227146245ef2b65480b647c50222465ca125de5880f192e3259e40d59"
+LATENT_UPSCALER_SIZE = 690593048
+LATENT_NODE_REVISION = "40316cf008b2fd8663263270669eb4da23f89d2c"
+LATENT_NODE_BASE_URL = f"https://raw.githubusercontent.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/{LATENT_NODE_REVISION}/"
+LATENT_NODE_FILES = {
+    "upstream_latent_3d.py": ("nodes/minimax_h3_latent_upscaler_3d.py", "744063b43e0f3eec23e2485cb7c65503069946ca9690906ecb548d7515cb89e2"),
+    "UPSTREAM_LICENSE": ("LICENSE", "86805fe49f63c8957e4427f7e7f26fba687c6cea05fa9249bf36f9d3316a0734"),
+}
+
 FACE_ASSETS = {
     "facerestore_models/codeformer.pth": (
         "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth",

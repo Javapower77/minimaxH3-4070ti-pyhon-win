@@ -127,13 +127,17 @@ def test_dasiwa_group_contains_all_ranks():
     assert LORA_GROUPS["dasiwa_v2"] == ("dasiwa_multistep_v2_r128_pruned",)
 
 
-def test_dmad_hyperflow_type_downloads_only_new_blend(monkeypatch, tmp_path):
+@pytest.mark.parametrize("model_type,lora_id", [
+    ("dmad_hyperflow", "dasiwa_dmad_hyperflow_4step_r256"),
+    ("pdmd_dmad", "dasiwa_pdmd_dmad_4step_r256"),
+])
+def test_dmad_blend_type_downloads_only_selected_blend(monkeypatch, tmp_path, model_type, lora_id):
     cfg = load_config()
     cfg.lora_dir = tmp_path
-    spec = cfg.lora_by_id("dasiwa_dmad_hyperflow_4step_r256")
-    assert LORA_GROUPS["dmad_hyperflow"] == (spec.id,)
+    spec = cfg.lora_by_id(lora_id)
+    assert LORA_GROUPS[model_type] == (spec.id,)
     assert LORA_GROUPS["dmad"] == ("dmad_4step_lora_critic",)
-    assert resolve_types(model_type="dmad_hyperflow", base=False, loras=False, all_flag=False) == ["dmad_hyperflow"]
+    assert resolve_types(model_type=model_type, base=False, loras=False, all_flag=False) == [model_type]
     assert resolve_types(model_type=spec.id, base=False, loras=False, all_flag=False,
                          catalog_ids=(spec.id,)) == [spec.id]
     captured = []
@@ -144,8 +148,48 @@ def test_dmad_hyperflow_type_downloads_only_new_blend(monkeypatch, tmp_path):
         return destination
 
     monkeypatch.setattr("minimax_h3_fl2v.download.download_url_file", fake_download)
-    assert download_loras(cfg, ids=list(LORA_GROUPS["dmad_hyperflow"])) == [tmp_path / spec.filename]
+    assert download_loras(cfg, ids=list(LORA_GROUPS[model_type])) == [tmp_path / spec.filename]
     assert captured == [(spec.download_url, spec.sha256)]
+
+
+@pytest.mark.parametrize("url,authenticated", [
+    ("https://civitai.red/api/download/models/3385247?fileId=3274094", True),
+    ("https://civitai.com/api/download/models/3385247?fileId=3274094", True),
+    ("https://huggingface.co/example/model", False),
+    ("https://civitai.red.example.invalid/file", False),
+    ("http://civitai.red/file", False),
+])
+def test_download_token_only_sent_to_https_civitai(monkeypatch, tmp_path, caplog, url, authenticated):
+    token = "synthetic-test-credential"
+    monkeypatch.setenv("CIVITAI_API_TOKEN", token)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+    monkeypatch.setattr("minimax_h3_fl2v.download.get_token", lambda: None)
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size):
+            yield b"model"
+
+    def get(request_url, **kwargs):
+        captured.update(kwargs)
+        assert token not in request_url
+        return Response()
+
+    monkeypatch.setattr("minimax_h3_fl2v.download.requests.get", get)
+    with caplog.at_level("INFO"):
+        download_url_file(url, tmp_path / "model.safetensors")
+    assert captured.get("headers", {}) == ({"Authorization": f"Bearer {token}"} if authenticated else {})
+    assert token not in caplog.text
 
 
 def test_download_url_file_skips_existing_checksum(tmp_path: Path):

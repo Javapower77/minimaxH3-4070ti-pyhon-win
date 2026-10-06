@@ -414,6 +414,8 @@ class MiniMaxH3Engine:
     ) -> GenerationResult:
         report = progress_callback or (lambda fraction, message: None)
         spec = self.config.lora_by_id(request.lora_id)
+        if request.latent_upscale and spec.backend != "comfy_pruned":
+            raise ValueError("Learned latent upscaling requires a pruned ComfyUI catalog option; it is not supported by the Diffusers backend.")
         if spec.backend == "comfy_pruned":
             with self._lock:
                 from .comfy_backend import PrunedComfyBackend

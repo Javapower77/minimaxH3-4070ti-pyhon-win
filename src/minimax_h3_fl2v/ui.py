@@ -303,6 +303,7 @@ def _recommended_reset_values(config: AppConfig) -> tuple:
         5.0, spec.nfe, "Fixed", config.seed, spec.lora_scale,
         *([0.8] * MAX_EXTRA_LORAS),
         True, False, 2.0, 0.25, "23.976 fps", False, 0.7,
+        False, 1.5, "cpu",
         spec.notes,
         _lora_guidance(config, spec.id, 0),
         "Fixed seed will be reused.",
@@ -368,6 +369,9 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
         output_fps,
         face_restore,
         face_fidelity,
+        latent_upscale,
+        latent_upscale_factor,
+        latent_upscale_device,
         progress=gr.Progress(track_tqdm=False),
     ):
         if not prompt or not str(prompt).strip():
@@ -427,6 +431,9 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
             target_fps=float(str(output_fps).split()[0]),
             face_restore=bool(face_restore),
             face_fidelity=float(face_fidelity),
+            latent_upscale=bool(latent_upscale),
+            latent_upscale_factor=float(latent_upscale_factor),
+            latent_upscale_device=str(latent_upscale_device),
         )
         progress(0.01, desc=f"🚀 Starting {describe_mode(first_image, last_image)} generation…")
 
@@ -607,6 +614,28 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                         label="Face fidelity",
                         info="Higher preserves identity; lower performs stronger restoration.",
                     )
+                    latent_upscale = gr.Checkbox(
+                        value=False,
+                        label="Learned latent upscale (experimental)",
+                        info="Separate from pixel-space Real-ESRGAN upscaling; applied before VAE decode.",
+                    )
+                    latent_upscale_factor = gr.Radio(
+                        choices=[1.5, 2.0],
+                        value=1.5,
+                        label="Latent upscale factor",
+                    )
+                    latent_upscale_device = gr.Radio(
+                        choices=["cpu", "cuda"],
+                        value="cpu",
+                        label="Latent upscale device",
+                        info="CPU is the default for 12 GB GPUs; CUDA uses additional VRAM.",
+                    )
+                    gr.Markdown(
+                        "**Warning:** Learned latent upscaling runs **before VAE decode** and "
+                        "raises **RAM and decode VRAM** requirements, even with the upscaler on CPU. "
+                        "It does **not** perform high-resolution diffusion refinement. "
+                        "Enabling pixel upscaling as well compounds the output scale."
+                    )
                     nfe = gr.Slider(
                         4,
                         50,
@@ -720,6 +749,9 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
             output_fps,
             face_restore,
             face_fidelity,
+            latent_upscale,
+            latent_upscale_factor,
+            latent_upscale_device,
             lora_notes,
             lora_help,
             seed_note,
@@ -757,6 +789,9 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                 output_fps,
                 face_restore,
                 face_fidelity,
+                latent_upscale,
+                latent_upscale_factor,
+                latent_upscale_device,
             ],
             outputs=[video, summary, seed, seed_note],
             show_progress="full",

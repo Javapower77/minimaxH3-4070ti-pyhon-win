@@ -36,6 +36,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--upscale-factor", type=float, default=2.0, choices=[1.5, 2.0])
     parser.add_argument("--detailer-strength", type=float, default=0.25)
     parser.add_argument(
+        "--latent-upscale",
+        action="store_true",
+        help=(
+            "Experimental learned latent upscale before VAE decode; raises RAM and "
+            "decode VRAM requirements, with no high-resolution diffusion refinement"
+        ),
+    )
+    parser.add_argument("--latent-upscale-factor", type=float, default=1.5, choices=[1.5, 2.0])
+    parser.add_argument(
+        "--latent-upscale-device",
+        choices=["cpu", "cuda"],
+        default="cpu",
+        help="Learned upscaler device; CPU is the default for 12 GB GPUs (decode still needs more memory)",
+    )
+    parser.add_argument(
         "--fps",
         type=float,
         default=23.976,
@@ -87,6 +102,9 @@ def main(argv: list[str] | None = None) -> None:
         target_fps=args.fps,
         face_restore=args.face_restore,
         face_fidelity=args.face_fidelity,
+        latent_upscale=args.latent_upscale,
+        latent_upscale_factor=args.latent_upscale_factor,
+        latent_upscale_device=args.latent_upscale_device,
     )
     result = engine.generate(request)
     print(

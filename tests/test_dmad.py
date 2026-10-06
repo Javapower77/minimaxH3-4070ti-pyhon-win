@@ -105,3 +105,16 @@ def test_dmad_hyperflow_catalog_is_separate_native_blend():
     assert original.audio_shift == 2
     assert "3383490" in spec.notes and "FL2VA only" in spec.notes
     assert config.default_lora_id == "taomate_fl2va_3step_ema"
+
+
+def test_pdmd_dmad_catalog_is_separate_native_blend():
+    config = load_config()
+    spec = config.lora_by_id("dasiwa_pdmd_dmad_4step_r256")
+    assert spec.filename == "minimax_h3_PDMD_DMAD_4step_r256_add_fro1_turbo_lora.safetensors"
+    assert spec.download_url == "https://civitai.red/api/download/models/3385247?fileId=3274094"
+    assert spec.sha256 == "B729385D6B338E7D07462AAFCCDAAB76FA7DD9817A53E300F3264D842643BC6C"
+    assert (spec.nfe, spec.lora_alpha, spec.lora_scale) == (4, 256, 1.0)
+    assert (spec.video_shift, spec.audio_shift, spec.megapixels) == (12, 3, 0.4)
+    assert spec.backend == "comfy_pruned" and spec.lora_format == "native"
+    assert "3385247" in spec.notes and "FL2VA only" in spec.notes
+    assert config.default_lora_id == "taomate_fl2va_3step_ema"

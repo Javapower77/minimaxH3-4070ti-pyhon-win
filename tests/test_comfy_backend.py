@@ -221,12 +221,13 @@ def test_pruned_catalog_routes_without_loading_diffusers(monkeypatch):
     assert engine.generate(GenerationRequest(prompt="test", lora_id="pruned")) is expected
 
 
-def test_dmad_hyperflow_generation_uses_native_file_without_original_converter(tmp_path, monkeypatch):
+@pytest.mark.parametrize("lora_id", ["dasiwa_dmad_hyperflow_4step_r256", "dasiwa_pdmd_dmad_4step_r256"])
+def test_dmad_blend_generation_uses_native_file_without_original_converter(tmp_path, monkeypatch, lora_id):
     from minimax_h3_fl2v.config import load_config
 
     cfg = load_config()
     cfg.lora_dir = tmp_path
-    spec = cfg.lora_by_id("dasiwa_dmad_hyperflow_4step_r256")
+    spec = cfg.lora_by_id(lora_id)
     source = tmp_path / spec.filename
     source.write_bytes(b"native blend")
     backend = PrunedComfyBackend(cfg)

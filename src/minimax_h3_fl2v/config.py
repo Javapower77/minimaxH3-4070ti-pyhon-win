@@ -89,6 +89,9 @@ class GenerationRequest:
     target_fps: float = 23.976
     face_restore: bool = False
     face_fidelity: float = 0.7
+    latent_upscale: bool = False
+    latent_upscale_factor: float = 1.5
+    latent_upscale_device: str = "cpu"
 
     @property
     def mode(self) -> str:

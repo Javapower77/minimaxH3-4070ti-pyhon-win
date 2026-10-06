@@ -7,6 +7,17 @@ uses date-based development entries because no tagged release series exists yet.
 
 ### Unreleased additions
 
+- Optional Alissonerdx learned H3 latent upscale stage on the currently generated
+  video before tiled VAE decode; independent 1.5×/2× and CPU/CUDA controls,
+  preserved audio, aligned output metadata, CLI flags and optional
+  `--type latent_upscaler` checkpoint/pinned MIT node downloads. Default off.
+  LMS Ref2VA sharpening is excluded per FL2VA-only scope; no second diffusion
+  refinement is implied. GPU quality and 12 GB peak-memory validation pending.
+- Dasiwa PDMD + DMAD 4-step r256 Fro1 as a separate experimental native pruned
+  catalog choice (`dasiwa_pdmd_dmad_4step_r256`, Civitai 3385247 file 3274094)
+  with `--type pdmd_dmad`, SHA-256 verification, 4 NFE, shifts 12/3 and 0.4 MP.
+  Civitai downloads accept a process-environment `CIVITAI_API_TOKEN` via HTTPS
+  Bearer authentication without placing credentials in URLs or the catalog.
 - Separate Dasiwa DMAD + Hyperflow 4-step r256 experimental catalog option
   (`dasiwa_dmad_hyperflow_4step_r256`, Civitai 3383490 file 3272202) and
   `--type dmad_hyperflow` download with SHA-256 verification. Uses the native

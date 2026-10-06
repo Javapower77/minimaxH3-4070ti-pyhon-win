@@ -70,6 +70,7 @@ adapter plus whatever alpha the official loader applied.
 | `dasiwa_multistep_v2_r128_pruned` | `minimax_h3_hyperflow_EMA600_pruned_r128_fro0995_turbo_lora.safetensors` | 8 | r128 | 1.0 MP |
 | `dmad_4step_lora_critic` | `dmad_minimax_h3_4step_lora_critic.safetensors` | 4 | r128 | 0.4 MP |
 | `dasiwa_dmad_hyperflow_4step_r256` | `minimax_h3_DMAD_Hyperflow_4step_r256_add_fro0995_turbo_lora.safetensors` | 4 | r256 | 0.4 MP |
+| `dasiwa_pdmd_dmad_4step_r256` | `minimax_h3_PDMD_DMAD_4step_r256_add_fro1_turbo_lora.safetensors` | 4 | r256 | 0.4 MP |
 | `none` | — | 50 | — | 1.0 MP |
 
 Hub: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo),
@@ -293,6 +294,32 @@ Tensor layout, loading against the local pruned backbone, and rendered
 quality remain unverified locally. The publisher's example metadata references
 a different DMAD filename, so it is not treated as proof for this exact blend.
 No additional sampler or Ref2VA workflow is installed.
+
+### Dasiwa PDMD + DMAD 4-step r256 (experimental)
+
+[Civitai 3385247](https://civitai.red/models/2929860/minimax-h3-turbo-or-ref2va-or-fl2va-or-hybrid?modelVersionId=3385247)
+(`turbo-4step-PD-v1`) blends PDMD and DMAD at rank 256 / Fro1. The creator
+describes it as an attempt to combine PDMD audio quality with DMAD motion and
+visual fidelity; these are publisher claims, not local benchmark results.
+
+- Catalog ID: `dasiwa_pdmd_dmad_4step_r256`; download type: `pdmd_dmad`.
+- File: `minimax_h3_PDMD_DMAD_4step_r256_add_fro1_turbo_lora.safetensors`.
+- Civitai file ID `3274094`, BF16, 2,422,472.03125 KiB (~2.31 GiB).
+- SHA-256: `B729385D6B338E7D07462AAFCCDAAB76FA7DD9817A53E300F3264D842643BC6C`.
+- Creator: 4 steps (possibly more), Euler/simple or Euler/beta, shifts 12/3.
+   Application: 4 NFE, strength 1.0, Euler/simple, 0.4 MP for the 12 GB profile.
+
+This is a separate native pruned ComfyUI choice, not an update to the original
+DMAD converter or the Hyperflow blend. The studio remains FL2VA-only; publisher
+Ref2VA/hybrid examples do not establish quality on this local FL2VA base.
+Start at 0.4 MP without extra adapters: this file is larger than the previous
+DMAD-Hyperflow blend. Real render quality remains unverified.
+
+For authenticated downloads, provide `CIVITAI_API_TOKEN` through the process
+environment. The downloader uses an HTTPS Civitai-only Authorization header
+and requests removes it on cross-host redirects. Never put tokens in catalog
+URLs, source files, or shell history. A manually downloaded file in
+`models/loras/` can also be verified by rerunning the download type.
 
 ### Installing the shared pruned backend
 

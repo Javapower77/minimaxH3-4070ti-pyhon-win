@@ -1,4 +1,14 @@
-from minimax_h3_fl2v.config import load_config
+from minimax_h3_fl2v.config import GenerationRequest, load_config
+
+
+def test_generation_request_latent_upscale_defaults():
+    request = GenerationRequest(prompt="A quiet landscape")
+    assert request.latent_upscale is False
+    assert request.latent_upscale_factor == 1.5
+    assert request.latent_upscale_device == "cpu"
+    assert request.upscale is False
+    assert request.upscale_factor == 2.0
+    assert request.detailer_strength == 0.0
 
 
 def test_default_low_vram_config(monkeypatch):

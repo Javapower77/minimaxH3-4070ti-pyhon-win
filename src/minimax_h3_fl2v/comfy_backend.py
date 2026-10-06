@@ -19,6 +19,7 @@ import websocket
 from PIL import Image
 
 from .config import AppConfig, GenerationRequest, LoRASpec, ROOT
+from .assets import LATENT_UPSCALER_FILE
 from .frames import duration_to_frames, frames_to_duration
 from .media import fit_image_without_crop, load_rgb_image
 from .lora import validate_pruned_fl2va_lora
@@ -53,6 +54,7 @@ NODE_STAGES = {
     "12": (0.22, "📈 Building simple sigma schedule"),
     "13": (0.23, "🧭 Preparing guidance"),
     "15": (0.25, "⚡ Sampling video and audio latents"),
+    "41": (0.82, "🔎 Upscaling video latents (learned 3D model)"),
     "16": (0.84, "🎞️ Decoding video frames"),
     "17": (0.88, "🔊 Decoding stereo audio"),
     "18": (0.92, "🎬 Creating synchronized video"),
@@ -258,8 +260,16 @@ class PrunedComfyBackend:
         face_fidelity: float = 0.7,
         video_shift: float = 12.0,
         audio_shift: float = 3.0,
+        latent_upscale: bool = False,
+        latent_upscale_factor: float = 1.5,
+        latent_upscale_device: str = "cpu",
     ) -> dict[str, dict[str, Any]]:
         image_node = "16"
+        if latent_upscale:
+            if latent_upscale_factor not in (1.5, 2.0):
+                raise ValueError("latent_upscale_factor must be 1.5 or 2.0")
+            if latent_upscale_device not in ("cpu", "cuda"):
+                raise ValueError("latent_upscale_device must be cpu or cuda")
         graph: dict[str, dict[str, Any]] = {
             "1": {"class_type": "UNETLoader", "inputs": {"unet_name": model, "weight_dtype": "default"}},
             "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": text_encoder, "type": "minimax", "device": "default"}},
@@ -272,6 +282,17 @@ class PrunedComfyBackend:
             "18": {"class_type": "CreateVideo", "inputs": {"images": [image_node, 0], "audio": ["17", 0], "fps": float(target_fps), "bit_depth": 8, "color_space": "sRGB"}},
             "19": {"class_type": "SaveVideo", "inputs": {"video": ["18", 0], "filename_prefix": filename_prefix, "format": "mp4", "codec": "h264"}},
         }
+        if latent_upscale:
+            graph["41"] = {
+                "class_type": "MiniMaxH3LearnedLatentUpscale",
+                "inputs": {"latent": ["15", 0], "model_name": LATENT_UPSCALER_FILE,
+                           "scale": float(latent_upscale_factor), "device": latent_upscale_device},
+            }
+            # Only the video branch changes; preserve the original generated audio.
+            graph["16"] = {"class_type": "VAEDecodeTiled", "inputs": {
+                "samples": ["41", 0], "vae": ["3", 0], "tile_size": 256,
+                "overlap": 64, "temporal_size": 64, "temporal_overlap": 8,
+            }}
         if face_restore:
             graph["34"] = {
                 "class_type": "FaceRestoreModelLoader",
@@ -471,7 +492,20 @@ class PrunedComfyBackend:
         report = progress_callback or (lambda fraction, message: None)
         overall_started = time.perf_counter()
         timings: dict[str, float] = {}
+        if request.latent_upscale:
+            model_path = self.root / "models" / "latent_upscale_models" / LATENT_UPSCALER_FILE
+            node_path = self.root / "custom_nodes" / "minimax_h3_nodes" / "upstream_latent_3d.py"
+            if not model_path.is_file() or not node_path.is_file():
+                raise FileNotFoundError(
+                    "Optional learned latent upscaler is missing. Download model type latent_upscaler "
+                    "with scripts/download_models.py, then restart the worker."
+                )
         self.ensure_worker(progress_callback=report)
+        if request.latent_upscale:
+            response = requests.get(f"{self.url}/object_info/MiniMaxH3LearnedLatentUpscale", timeout=30)
+            response.raise_for_status()
+            if "MiniMaxH3LearnedLatentUpscale" not in response.json():
+                raise RuntimeError("Restart the ComfyUI worker to load the learned latent upscaler node.")
         report(0.05, "🖼️ Preparing and uploading reference frames…")
         prepare_started = time.perf_counter()
         first = load_rgb_image(request.first_image) if request.first_image else None
@@ -541,6 +575,9 @@ class PrunedComfyBackend:
             face_fidelity=request.face_fidelity,
             video_shift=spec.video_shift if request.video_shift is None else request.video_shift,
             audio_shift=spec.audio_shift if request.audio_shift is None else request.audio_shift,
+            latent_upscale=request.latent_upscale,
+            latent_upscale_factor=request.latent_upscale_factor,
+            latent_upscale_device=request.latent_upscale_device,
         )
         started = time.perf_counter()
         report(0.08, "📤 Submitting pruned workflow to local worker…")
@@ -571,14 +608,18 @@ class PrunedComfyBackend:
             except requests.RequestException:
                 logger.warning("Could not request ComfyUI model unload", exc_info=True)
         elapsed = time.perf_counter() - started
-        output_width = round(width * request.upscale_factor) if request.upscale else width
-        output_height = round(height * request.upscale_factor) if request.upscale else height
+        latent_width = round(width * request.latent_upscale_factor / 32) * 32 if request.latent_upscale else width
+        latent_height = round(height * request.latent_upscale_factor / 32) * 32 if request.latent_upscale else height
+        output_width = round(latent_width * request.upscale_factor) if request.upscale else latent_width
+        output_height = round(latent_height * request.upscale_factor) if request.upscale else latent_height
         output_frames = (
             round((frames - 1) * request.target_fps / self.config.fps) + 1
             if request.target_fps > self.config.fps
             else frames
         )
         suffix = "_upscaled" if request.upscale else ""
+        if request.latent_upscale:
+            suffix = "_latent" + suffix
         final = self.config.output_dir / f"{time.strftime('%Y%m%d-%H%M%S')}_{request.mode}_seed{request.seed}_{output_width}x{output_height}_pruned{suffix}.mp4"
         final.parent.mkdir(parents=True, exist_ok=True)
         if output != final.resolve():

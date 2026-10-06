@@ -225,3 +225,19 @@ catalog:
     backend: comfy_pruned
     lora_format: native
     notes: Civitai 3383490 turbo-4step-DH-v1, file 3272202; Darksidewalker DMAD + Hyperflow blend using Silveroxides extraction, BF16 r256 Fro0.995. Experimental; uses native pruned ComfyUI loading, not the original DMAD converter. Creator recommends 4 steps (possibly more), Euler/simple or Euler/beta, shifts 12/3; app uses Euler/simple, strength 1.0 and reduced 0.4 MP for 12 GB. FL2VA only in this studio. Tensor layout and rendered quality are unverified locally; Civitai may require authenticated manual download.
+
+  - id: dasiwa_pdmd_dmad_4step_r256
+    name: Dasiwa PDMD + DMAD 4-step r256 (experimental)
+    repo: null
+    filename: minimax_h3_PDMD_DMAD_4step_r256_add_fro1_turbo_lora.safetensors
+    download_url: https://civitai.red/api/download/models/3385247?fileId=3274094
+    sha256: B729385D6B338E7D07462AAFCCDAAB76FA7DD9817A53E300F3264D842643BC6C
+    nfe: 4
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 256
+    lora_scale: 1.0
+    megapixels: 0.4
+    backend: comfy_pruned
+    lora_format: native
+    notes: Civitai 3385247 turbo-4step-PD-v1, file 3274094; Darksidewalker PDMD + DMAD blend, BF16 r256 Fro1 (~2.31 GiB). Separate from original DMAD and DMAD-Hyperflow. Creator recommends 4 steps (possibly more), Euler/simple or Euler/beta, shifts 12/3; app uses Euler/simple, strength 1.0 and reduced 0.4 MP for 12 GB. Experimental native pruned ComfyUI option; FL2VA only in this studio. Local tensor compatibility and rendered quality require validation. Authenticated download uses CIVITAI_API_TOKEN from the environment, never the catalog.

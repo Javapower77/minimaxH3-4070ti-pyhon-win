@@ -86,6 +86,7 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 | `12gb` | Pruned FP8 transformer, NVFP4 text encoder, VAEs, Real-ESRGAN, RIFE, CodeFormer, TaoMate LoRA (default) |
 | `pruned` | Comfy-Org MiniMax-H3 pruned transformer, text encoder, video/audio VAEs |
 | `postprocess` | Real-ESRGAN x4plus, RIFE 4.25 Lite, CodeFormer, face-detection, ParseNet |
+| `latent_upscaler` | Optional Alissonerdx FP16 learned H3 latent upscaler and pinned 3D node |
 | `backend` | `pruned` + `postprocess` |
 | `taomate` | Default compact TaoMate Civitai LoRA |
 | `silveroxides` | Silveroxides DARE-TIES pruned v1 Hugging Face LoRA |
@@ -93,6 +94,7 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 | `dasiwa_v2` | Dasiwa turbo-multistep-v2 Hyperflow+EMA600 pruned r128 |
 | `dmad` | Original DMAD 4-step lora_critic r128; experimental FL2VA transfer |
 | `dmad_hyperflow` | Dasiwa DMAD + Hyperflow 4-step r256 blend (Civitai 3383490) |
+| `pdmd_dmad` | Dasiwa PDMD + DMAD 4-step r256 blend (Civitai 3385247) |
 | `lightx2v` | Official LightX2V / larryvrh turbo LoRAs |
 | `loras` | Every catalogued LoRA that has a download source |
 | `base` | Full Diffusers FL2VA snapshot (`models/MiniMax-H3`) |
@@ -106,6 +108,7 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 .\.venv\Scripts\python.exe scripts\download_models.py --type dasiwa_v2
 .\.venv\Scripts\python.exe scripts\download_models.py --type dmad
 .\.venv\Scripts\python.exe scripts\download_models.py --type dmad_hyperflow
+.\.venv\Scripts\python.exe scripts\download_models.py --type pdmd_dmad
 ```
 
 The **DMAD 4-step lora_critic** option uses the original paper checkpoint from
@@ -125,6 +128,22 @@ quality have not been validated locally. If Civitai returns HTTP 401, download
 while signed in and place the exact catalog filename in `models/loras/`, then
 rerun `--type dmad_hyperflow` to verify its SHA-256. `--type dmad` is unchanged.
 
+**Dasiwa PDMD + DMAD 4-step r256 (experimental)** is a separate Fro1 blend
+from Civitai version `3385247`, file `3274094` (~2.31 GiB). Defaults are 4 NFE,
+strength 1.0, shifts 12/3, Euler/simple and 0.4 MP on the native pruned backend.
+Civitai downloads support `CIVITAI_API_TOKEN` supplied through the process
+environment; credentials are sent only to HTTPS Civitai hosts in the Bearer
+header, not stored in the catalog or placed in download URLs. Do not commit
+tokens or enter them as literal terminal commands. Original DMAD, Hyperflow,
+and TaoMate choices remain unchanged.
+
+The downloader prompts with **masked input** for missing Hugging Face or Civitai
+tokens, only for providers used by the selected model set. Existing environment
+credentials and cached Hugging Face login are reused. Press Enter to attempt a
+public download. Entered tokens are temporary and cleared after the download,
+including on failure. Use `--no-input` for unattended runs; redirected input
+also disables prompts. Tokens are never accepted as command-line arguments.
+
 ```bash
 python scripts/download_models.py --type 12gb
 python scripts/download_models.py --type h100
@@ -132,6 +151,14 @@ python scripts/download_models.py --type h100
 
 Legacy `--base`, `--loras`, `--lora-id`, and `--all` still work. `--all` is
 an H100 alias (`base` + `loras`), not the 12 GB default.
+
+**Optional learned latent upscale:** download `--type latent_upscaler`, restart
+the worker, then enable **Learned latent upscale (experimental)** in Advanced
+options. Choose 1.5×/2× and CPU/CUDA; CPU/1.5× is the low-VRAM starting point.
+It runs on the current video's latents before tiled VAE decode, preserves audio,
+and can be combined with existing pixel enhancement (size factors compound).
+The LMS LoRA is not enabled: it needs a compatible Ref2VA guided second pass,
+outside the selected FL2VA-only scope. See [details and memory limits](docs/LATENT_UPSCALER.md).
 
 The optional Silveroxides DARE-TIES pruned v1 adapter
 (`silveroxides_dareties_pruned_v1`) is the same pruned AdaLN-8 architecture and

@@ -16,6 +16,7 @@ from minimax_h3_fl2v.assets import DEFAULT_COMFY_ROOT  # noqa: E402
 from minimax_h3_fl2v.download import (  # noqa: E402
     download_postprocess_models,
     download_pruned_models,
+    download_latent_upscaler,
 )
 
 COMFY = DEFAULT_COMFY_ROOT
@@ -66,6 +67,7 @@ def link_or_copy(source: Path, destination: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-install", action="store_true", help="Only download/check model files")
+    parser.add_argument("--latent-upscaler", action="store_true", help="Also install the optional learned latent upscaler")
     args = parser.parse_args()
 
     if not args.skip_install:
@@ -99,12 +101,17 @@ def main() -> None:
 
     app_nodes = ROOT / "comfy_nodes" / "minimax_h3_nodes"
     installed_nodes = COMFY / "custom_nodes" / "minimax_h3_nodes"
+    optional_files = {name: (installed_nodes / name).read_bytes()
+                      for name in ("upstream_latent_3d.py", "UPSTREAM_LICENSE")
+                      if (installed_nodes / name).is_file()}
     if installed_nodes.exists() or installed_nodes.is_symlink():
         if installed_nodes.is_dir() and not installed_nodes.is_symlink():
             shutil.rmtree(installed_nodes)
         else:
             installed_nodes.unlink()
     shutil.copytree(app_nodes, installed_nodes)
+    for name, contents in optional_files.items():
+        (installed_nodes / name).write_bytes(contents)
 
     from minimax_h3_fl2v.offline import allow_online_for_download
 
@@ -113,6 +120,8 @@ def main() -> None:
     download_pruned_models(COMFY)
     print("Downloading post-process models (Real-ESRGAN, RIFE, CodeFormer)...", flush=True)
     download_postprocess_models(COMFY)
+    if args.latent_upscaler:
+        download_latent_upscaler(COMFY)
 
     lora_target = COMFY / "models/loras"
     lora_target.mkdir(parents=True, exist_ok=True)

@@ -3,18 +3,30 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import getpass
 import hashlib
 import logging
 import os
 import shutil
+import sys
 import urllib.request
+import warnings
+from urllib.parse import urlsplit
 from pathlib import Path
 
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import get_token, hf_hub_download, snapshot_download
 import requests
 
 from .assets import (
     DEFAULT_COMFY_ROOT,
+    ROOT,
+    LATENT_NODE_BASE_URL,
+    LATENT_NODE_FILES,
+    LATENT_UPSCALER_FILE,
+    LATENT_UPSCALER_URL,
+    LATENT_UPSCALER_SHA256,
+    LATENT_UPSCALER_SIZE,
     FACE_ASSETS,
     PRUNED_FILES,
     PRUNED_REPO,
@@ -55,6 +67,7 @@ FL2VA_IGNORE = (
 MODEL_TYPES = (
     "pruned",
     "postprocess",
+    "latent_upscaler",
     "backend",
     "base",
     "loras",
@@ -64,6 +77,7 @@ MODEL_TYPES = (
     "dasiwa_v2",
     "dmad",
     "dmad_hyperflow",
+    "pdmd_dmad",
     "lightx2v",
     "12gb",
     "h100",
@@ -82,6 +96,7 @@ LORA_GROUPS = {
     "dasiwa_v2": ("dasiwa_multistep_v2_r128_pruned",),
     "dmad": ("dmad_4step_lora_critic",),
     "dmad_hyperflow": ("dasiwa_dmad_hyperflow_4step_r256",),
+    "pdmd_dmad": ("dasiwa_pdmd_dmad_4step_r256",),
     "lightx2v": (
         "fl2va_turbo_8step_768p",
         "fl2va_turbo_4step_768p",
@@ -144,7 +159,17 @@ def download_url_file(
     logger.info("Downloading %s", url)
     temporary = destination.with_suffix(destination.suffix + ".part")
     digest = hashlib.sha256()
-    with requests.get(url, stream=True, timeout=60) as response:
+    parsed = urlsplit(url)
+    token = os.getenv("CIVITAI_API_TOKEN")
+    request_options = {}
+    if token and parsed.scheme == "https" and parsed.hostname in {"civitai.red", "civitai.com"}:
+        # requests strips Authorization when redirecting to a different host.
+        request_options["headers"] = {"Authorization": f"Bearer {token}"}
+    elif parsed.scheme == "https" and parsed.hostname == "huggingface.co":
+        hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or get_token()
+        if hf_token:
+            request_options["headers"] = {"Authorization": f"Bearer {hf_token}"}
+    with requests.get(url, stream=True, timeout=60, **request_options) as response:
         response.raise_for_status()
         with temporary.open("wb") as stream:
             for chunk in response.iter_content(16 * 1024 * 1024):
@@ -309,6 +334,22 @@ def download_postprocess_models(comfy_root: Path | None = None) -> list[Path]:
     return downloaded
 
 
+def download_latent_upscaler(comfy_root: Path | None = None) -> list[Path]:
+    """Install only the optional FP16 checkpoint and pinned MIT inference module."""
+    root = comfy_root or DEFAULT_COMFY_ROOT
+    model = download_url_file(
+        LATENT_UPSCALER_URL, root / "models/latent_upscale_models" / LATENT_UPSCALER_FILE,
+        expected_sha256=LATENT_UPSCALER_SHA256, expected_size=LATENT_UPSCALER_SIZE,
+    )
+    nodes = root / "custom_nodes/minimax_h3_nodes"
+    nodes.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "comfy_nodes/minimax_h3_nodes/__init__.py", nodes / "__init__.py")
+    paths = [model]
+    for filename, (relative, checksum) in LATENT_NODE_FILES.items():
+        paths.append(download_url_file(LATENT_NODE_BASE_URL + relative, nodes / filename, expected_sha256=checksum))
+    return paths
+
+
 def known_model_types(config=None) -> tuple[str, ...]:
     cfg = config or load_config()
     catalog_ids = tuple(spec.id for spec in cfg.catalog if not spec.is_base)
@@ -377,6 +418,8 @@ def run_downloads(
             download_pruned_models(comfy_root)
         elif item == "postprocess":
             download_postprocess_models(comfy_root)
+        elif item == "latent_upscaler":
+            download_latent_upscaler(comfy_root)
         elif item == "base":
             download_base_model(cfg)
         elif item == "loras":
@@ -389,6 +432,76 @@ def run_downloads(
             raise ValueError(f"Unknown model type: {item}")
 
 
+def _download_providers(types: list[str], config, lora_ids: list[str] | None = None) -> set[str]:
+    """Identify providers from the resolved sets and catalog download sources."""
+    providers: set[str] = set()
+    wanted: set[str] = set()
+    for item in types:
+        if item in {"base", "pruned", "postprocess", "latent_upscaler"}:
+            providers.add("huggingface")
+        elif item == "loras":
+            wanted.update(lora_ids if lora_ids else (spec.id for spec in config.catalog if not spec.is_base))
+        elif item in LORA_GROUPS:
+            wanted.update(LORA_GROUPS[item])
+        else:
+            wanted.add(item)
+    for spec in config.catalog:
+        if spec.id not in wanted or spec.is_base:
+            continue
+        if spec.download_url:
+            host = urlsplit(spec.download_url).hostname
+            if host in {"civitai.red", "civitai.com"}:
+                providers.add("civitai")
+            elif host == "huggingface.co":
+                providers.add("huggingface")
+        elif spec.repo:
+            providers.add("huggingface")
+    return providers
+
+
+@contextmanager
+def _download_credentials(types: list[str], config, lora_ids=None, *, no_input: bool = False):
+    """Prompt once per needed provider; never persist entered credentials."""
+    original_hf = config.hf_token
+    changed_env: dict[str, str | None] = {}
+    try:
+        providers = _download_providers(types, config, lora_ids)
+        for provider, variable, label in (
+            ("huggingface", "HF_TOKEN", "Hugging Face"),
+            ("civitai", "CIVITAI_API_TOKEN", "Civitai"),
+        ):
+            if provider not in providers:
+                continue
+            existing = (_token(config) or get_token()) if provider == "huggingface" else os.getenv(variable)
+            if existing:
+                if provider == "huggingface":
+                    config.hf_token = existing
+                continue
+            if no_input or not sys.stdin.isatty():
+                continue
+            # Never fall back to an echoed password prompt on unsupported terminals.
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                try:
+                    token = getpass.getpass(f"{label} token (hidden; Enter for public/anonymous download): ").strip()
+                except (EOFError, getpass.GetPassWarning):
+                    print(f"Masked {label} input unavailable; set {variable} securely or use an anonymous download.")
+                    continue
+            if token:
+                changed_env[variable] = os.environ.get(variable)
+                os.environ[variable] = token
+                if provider == "huggingface":
+                    config.hf_token = token
+        yield
+    finally:
+        config.hf_token = original_hf
+        for variable, previous in changed_env.items():
+            if previous is None:
+                os.environ.pop(variable, None)
+            else:
+                os.environ[variable] = previous
+
+
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(
@@ -398,6 +511,7 @@ def main(argv: list[str] | None = None) -> None:
 Model types:
   pruned         FP8 pruned transformer, NVFP4 text encoder, video/audio VAEs
   postprocess    Real-ESRGAN, RIFE 4.25 Lite, CodeFormer, face-detection weights
+    latent_upscaler Optional learned H3 latent upscaler FP16 and pinned node code
   backend        pruned + postprocess
   base           full Diffusers FL2VA snapshot (optional, H100 / non-pruned LoRAs)
   loras          every catalogued LoRA with a download source
@@ -407,6 +521,7 @@ Model types:
     dasiwa_v2      Dasiwa turbo-multistep-v2 Hyperflow+EMA600 pruned r128
     dmad           Original DMAD 4-step lora_critic (not full_critic)
     dmad_hyperflow  Dasiwa DMAD + Hyperflow 4-step r256 Civitai blend
+    pdmd_dmad      Dasiwa PDMD + DMAD 4-step r256 Civitai blend
   lightx2v       official LightX2V / larryvrh turbo LoRAs
   12gb           pruned + postprocess + TaoMate (default)
   h100           Diffusers base + all catalog LoRAs
@@ -425,6 +540,7 @@ Catalog ids such as taomate_fl2va_3step_ema are also accepted.
     parser.add_argument("--loras", action="store_true", help="Download catalogued Turbo LoRAs")
     parser.add_argument("--all", action="store_true", help="H100 alias: download Diffusers base and LoRAs")
     parser.add_argument("--lora-id", action="append", default=[], help="Limit LoRA downloads to these catalog ids")
+    parser.add_argument("--no-input", action="store_true", help="Disable masked token prompts; use existing credentials or anonymous downloads")
     parser.add_argument(
         "--comfy-root",
         type=Path,
@@ -445,7 +561,8 @@ Catalog ids such as taomate_fl2va_3step_ema are also accepted.
     lora_ids = args.lora_id or None
     if lora_ids and "loras" not in types and not any(item in LORA_GROUPS or item in catalog_ids for item in types):
         types.append("loras")
-    run_downloads(types, lora_ids=lora_ids, config=config, comfy_root=args.comfy_root)
+    with _download_credentials(types, config, lora_ids, no_input=args.no_input):
+        run_downloads(types, lora_ids=lora_ids, config=config, comfy_root=args.comfy_root)
     print("Done.")
 
 
