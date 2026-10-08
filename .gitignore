@@ -12,6 +12,7 @@ build/
 .hf_cache/
 models/
 outputs/
+logs/
 uploads/
 *.mp4
 *.wav

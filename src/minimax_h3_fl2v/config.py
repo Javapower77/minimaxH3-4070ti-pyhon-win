@@ -183,6 +183,7 @@ def load_lora_catalog(path: Path = DEFAULT_LORA_CATALOG_PATH) -> list[LoRASpec]:
                 megapixels=float(item.get("megapixels", 1.0)),
                 notes=item.get("notes", ""),
                 recommended=bool(item.get("recommended", False)),
+                local_path=_resolve_path(item["local_path"], ROOT) if item.get("local_path") else None,
                 backend=str(item.get("backend", "diffusers")),
                 download_url=item.get("download_url"),
                 sha256=item.get("sha256"),

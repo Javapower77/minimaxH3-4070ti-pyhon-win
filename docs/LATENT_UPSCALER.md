@@ -2,7 +2,7 @@
 
 The experimental FP16 [h3_upscaler_lms_v0.1](https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/blob/main/docs/latent-upscaler.md)
 was fine-tuned for 2,000 steps on a sharpness dataset. It is a standalone neural
-upscaler, **not the LMS LoRA or a second diffusion pass**.
+upscaler, **not the restoration LoRA or a second diffusion pass**.
 
 ## Setup and selection
 
@@ -49,10 +49,14 @@ architecture loading (345,280,216 parameters). A tiny real-model CPU inference
 through the joint-AV bridge preserved video time/channels and returned finite
 2× output. This is not a full-video quality, CUDA, or peak-memory benchmark.
 
-## Why LMS is not enabled
+## Separate restoration enhancement
 
-The separate [LMS sharpening LoRA](https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/blob/main/docs/lms.md)
-requires a source-aligned `MiniMaxH3AddGuide` and compatible Ref2VA model for a
-second diffusion pass. It is not interchangeable with the studio's FL2VA
-adapter stack. Per the selected FL2VA-only scope, no LMS/Ref2VA option or model
-download is added. Existing pixel sharpening is available but is not LMS.
+The opt-in **Restore / Enhance / Improve — Nugus rank16** section uses a
+separate Ref2VA second pass, not the FL2VA adapter stack or this latent upscaler.
+Native `MiniMaxH3ReferenceToVideo` takes a same-aspect-ratio video reference and
+source audio when present, not a guide. All original audio is copied to the
+final MKV, never replaced by generated audio. No turbo is enabled by default;
+strength 1.0 is the creator setting and 30 steps is an unverified local default.
+Optional downloads, normalization, the runtime all-key shape gate, unknown
+adapter header compatibility and unvalidated GPU feasibility are documented in
+[RESTORATION.md](RESTORATION.md). Normal FL2VA generation is unchanged.

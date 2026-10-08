@@ -208,6 +208,25 @@ catalog:
     lora_format: dmad_diffusers
     notes: Original Yzmblog/DMAD paper lora_critic checkpoint (EMA iteration 800), not full_critic. Rank 128; automatic lossless native-key conversion. Experimental T2VA-to-FL2VA transfer; start without reference frames. 4 NFE, strength 1.0, video/audio shifts 12/2, Euler/simple (upstream alternative, NOT the paper's re-noise sampler). Reduced 0.4 MP for 12 GB; frame conditioning and rendered quality are unverified.
 
+  # Verified against the local pruned FL2VA base; "full" refers to the source
+  # critic variant, not full-width AdaLN. Reuse the existing worker file.
+  - id: dmad_full_dareties_v4_step600
+    name: DMAD Full DARE-TIES v4 step600 (experimental)
+    repo: null
+    filename: minimax_h3_dmad_full_dareties_v4_step600_comfy.safetensors
+    local_path: .runtime/ComfyUI/models/loras/minimax_h3_dmad_full_dareties_v4_step600_comfy.safetensors
+    download_url: https://civitai.com/api/download/models/3391964?fileId=3281488
+    sha256: CA34641D06C4E714D27A8540FD20721EF5DAF54E9D58FA8BE169D33B2D2699A9
+    nfe: 8
+    video_shift: 12.0
+    audio_shift: 3.0
+    lora_alpha: 128
+    lora_scale: 1.0
+    megapixels: 0.4
+    backend: comfy_pruned
+    lora_format: native
+    notes: Civitai model 2837571 version 3391964 file 3281488 (not the _fro sibling); 3913285640 bytes FP32. Experimental DMAD full-critic + larryvrh v4 merge; 208 native pairs, ranks 128/384, AdaLN dropped, alpha folded. Local SHA and all target shapes verified against pruned FL2VA; no GPU render verified. Creator recommends 6-8 steps, er_sde/lcm, simple, strength 1.0, shifts 12/3; app uses Euler/simple and reduced 0.4 MP for memory. Existing worker file reused without copying; no defaults changed.
+
   # Separate community DMAD + Hyperflow blend; not the original paper LoRA.
   # Uses the existing native pruned workflow, not the original DMAD converter.
   - id: dasiwa_dmad_hyperflow_4step_r256

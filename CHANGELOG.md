@@ -1,5 +1,16 @@
 # Changelog
 
+## Restoration replacement
+
+- Replaced the LMS application section with Nugus Restore / Enhance / Improve
+  rank16 (Civitai version 3389308, file 3278511), using native Ref2VA video and
+  optional soundtrack references, not guide anchoring. Downloads are opt-in
+  `restore` / `restore_base`; no turbo is applied by default. Normalization and
+  original-audio preservation remain independent of FL2VA generation.
+- Metadata and byte count verified; anonymous header access returned 401.
+  Pruned compatibility requires local checksum and all-key shape validation;
+  no GPU render is claimed. Earlier LMS entries below are historical.
+
 All notable changes to this project are documented here. The project currently
 uses date-based development entries because no tagged release series exists yet.
 
@@ -7,6 +18,66 @@ uses date-based development entries because no tagged release series exists yet.
 
 ### Unreleased additions
 
+- Experimental normal-generation `dmad_full_dareties_v4_step600` catalog choice
+  and `--type dmad_dareties` alias, pinned Civitai 2837571/3391964 file 3281488.
+  Local 3,913,285,640-byte FP32 file matches SHA-256
+  `ca34641d06c4e714d27a8540fd20721ef5daf54e9d58fa8be169d33b2d2699a9`;
+  all 208 native pairs match the verified pruned FL2VA base (ranks128/384,
+  AdaLN dropped, no direct diffs). Root-relative catalog `local_path` is now
+  parsed and honored by downloads; resident worker files/hard links are never
+  unlinked by synchronization, while live discovery remains checked.
+  App uses 8 steps, strength1.0, shifts12/3, Euler/simple, 0.4 MP; creator
+  recommends 6–8 steps, er_sde/lcm/simple. No GPU run or model download;
+  TaoMate/original DMAD defaults and character swap/restoration unchanged.
+- Independent native image+video **Character swap** section with editable target
+  prompt, 20-step requested baseline (not prescribed by the author card), strength
+  1.0, `res_multistep`/`simple`, turbo off by default and no restoration LoRA. Preserves the
+  source canvas without resizing controls or a forced 0.4 MP limit; warns about
+  memory exhaustion and unproven face-only, temporal and lip-sync fidelity.
+- Character-only normalization/output-FPS controls removed: source must be exact
+  24 fps CFR, 32-aligned, `17n+5` frames and zero-start, with no normalization or
+  resampling. Persistent image/video originals and verified-remux safeguards for
+  all original audio tracks remain. Restoration features and docs are unchanged.
+- Default-off Ref2VA turbo checkbox forwards `use_turbo: bool = False`; effective
+  steps are 8 when enabled, otherwise requested steps. Toggle selects 8 disabled
+  steps or resets to 20 editable steps. Turbo uses Euler/simple, shifts 12/3 and
+  fixed strength 1.0 before the character LoRA, whose strength stays independently
+  editable at default 1.0.
+- Optional worker-LoRA-only `--type character_swap`, excluded from aggregate
+  download groups; reuses the ~21 GB `restore_base` and encoder/VAEs. Pins
+  `akatz-ai/MiniMax-H3-Character-Swap-LoRA` revision
+  `62407e0cc8089c363abd9ce4b0b27662abb237af`, file
+  `h3_character_swap_pro4500_1000.safetensors` (155,110,320 bytes), SHA-256
+  `4b2a3f420ae804c0aa3422761ff84dbd1bf52eef6900ffab6d2e66df63cb4e79`.
+  Actual local 416 tensor keys/shapes pass against pruned Ref2VA FP8; pinned base
+  and character hashes match. GPU rendering is untested. No downloads needed
+  for this documentation work.
+- Optional `--type ref2va_turbo` pins Kijai/MiniMax-H3-experimental revision
+  `d8023be02fefbb3633b0cd335c3879f91177299d`, file
+  `MiniMax-H3-Ref2VA-Acc-8Step_pruned_comfy.safetensors` (1,725,921,392 bytes),
+  SHA-256 `6f18e1c2eccb14b37322607730f26b16bf1169b56cd098ea006cffaec43d1e39`.
+  Actual header: 578 tensors, AdaLN across 50 blocks, curve-compatible input 8 /
+  output 96,768, not full-width. Actual local checksum, every target, and ordered
+  turbo-first stack pass preflight with matching 32× PDD weight/bias banks.
+  Malformed reshapes, incompatible later patches, and full-width AdaLN fail closed;
+  no GPU render or 12 GB fit is validated.
+- `docs/CHARACTER_SWAP.md` documents the author's pruned INT8 training base,
+  native-worker boundaries versus fused/GGUF/custom-pack workflows, and upstream
+  Community License territorial limits. `workflows/CharacterSwap.json` and
+  existing changes remain untouched; existing `.gitignore` already excludes
+  downloaded models and uploads.
+- LMS-only optional input normalization (default off): timestamp-based arbitrary
+  FPS/VFR to 24 FPS, cloned tail padding to the next `17n+5`, enhanced-tail trim,
+  native/source output rate and reported duration/temporal-loss adjustments.
+  Original source/audio timelines preserved; payload-only audio digest checks
+  tolerate differing streamhash timebase headers and CFR validation tolerates
+  container timestamp quantization. Offline mocks and tiny ffmpeg tests added.
+- Separate LMS / Sharpness section for generated or uploaded 24 fps video,
+  using an aligned full-source guide, optional pinned pruned Ref2VA FP8 base,
+  LMS r64 and Ref2VA eight-step turbo. Independent strength/steps/seed controls,
+  retained original source and lossless original-audio remux to MKV. Added
+  optional `lms`/`lms_base` downloads and worker-profile/idle-queue checks.
+  FL2VA defaults remain unchanged; 12 GB real-render feasibility is unverified.
 - Optional Alissonerdx learned H3 latent upscale stage on the currently generated
   video before tiled VAE decode; independent 1.5×/2× and CPU/CUDA controls,
   preserved audio, aligned output metadata, CLI flags and optional

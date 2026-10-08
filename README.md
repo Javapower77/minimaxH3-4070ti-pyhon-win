@@ -76,6 +76,17 @@ for compatibility, file provenance, and tuning details.
 
 ## Download models by type
 
+Optional normal-generation Turbo choice **DMAD Full DARE-TIES v4 step600**
+(`dmad_full_dareties_v4_step600`) reuses the existing
+`.runtime/ComfyUI/models/loras/minimax_h3_dmad_full_dareties_v4_step600_comfy.safetensors`
+via catalog `local_path`, resolved from the repository root. Its local SHA-256
+and all 208 native target pairs match the pruned FL2VA base; AdaLN is dropped,
+not full-width. Uses 8 steps, strength 1.0, shifts 12/3, Euler/simple and 0.4 MP.
+Creator guidance is 6–8 steps with `er_sde/lcm`/simple; GPU quality and 12 GB fit
+remain unverified. The FP32 file is 3.64 GiB, much larger than default TaoMate.
+Default selections and character-swap/restoration modes are unchanged.
+See [verified provenance and compatibility](docs/LORA.md#dmad-full-dare-ties-v4-step600-experimental).
+
 `scripts/download_models.py` is the single online downloader. Pass `--type`
 to choose which weights to fetch. With no flags it downloads the 12 GB set
 (`pruned` + `postprocess` + `taomate`). Catalog ids such as
@@ -87,6 +98,8 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 | `pruned` | Comfy-Org MiniMax-H3 pruned transformer, text encoder, video/audio VAEs |
 | `postprocess` | Real-ESRGAN x4plus, RIFE 4.25 Lite, CodeFormer, face-detection, ParseNet |
 | `latent_upscaler` | Optional Alissonerdx FP16 learned H3 latent upscaler and pinned 3D node |
+| `character_swap` | Optional pinned Akatz character-swap worker LoRA only; reuse `restore_base` and installed encoder/VAEs |
+| `ref2va_turbo` | Optional pinned Ref2VA eight-step acceleration worker LoRA only; character-swap turbo remains off by default |
 | `backend` | `pruned` + `postprocess` |
 | `taomate` | Default compact TaoMate Civitai LoRA |
 | `silveroxides` | Silveroxides DARE-TIES pruned v1 Hugging Face LoRA |
@@ -94,6 +107,7 @@ to choose which weights to fetch. With no flags it downloads the 12 GB set
 | `dasiwa_v2` | Dasiwa turbo-multistep-v2 Hyperflow+EMA600 pruned r128 |
 | `dmad` | Original DMAD 4-step lora_critic r128; experimental FL2VA transfer |
 | `dmad_hyperflow` | Dasiwa DMAD + Hyperflow 4-step r256 blend (Civitai 3383490) |
+| `dmad_dareties` | Experimental DMAD full-critic + larryvrh v4 DARE-TIES merge (Civitai 3391964 file 3281488); reuses root-relative worker LoRA |
 | `pdmd_dmad` | Dasiwa PDMD + DMAD 4-step r256 blend (Civitai 3385247) |
 | `lightx2v` | Official LightX2V / larryvrh turbo LoRAs |
 | `loras` | Every catalogued LoRA that has a download source |
@@ -157,8 +171,69 @@ the worker, then enable **Learned latent upscale (experimental)** in Advanced
 options. Choose 1.5×/2× and CPU/CUDA; CPU/1.5× is the low-VRAM starting point.
 It runs on the current video's latents before tiled VAE decode, preserves audio,
 and can be combined with existing pixel enhancement (size factors compound).
-The LMS LoRA is not enabled: it needs a compatible Ref2VA guided second pass,
-outside the selected FL2VA-only scope. See [details and memory limits](docs/LATENT_UPSCALER.md).
+See [details and memory limits](docs/LATENT_UPSCALER.md).
+
+### Optional restoration second pass
+
+**Restore / Enhance / Improve — Nugus BF16 rank16** is an independent,
+experimental **Ref2VA reference second pass**, not an FL2VA LoRA or automatic
+latent upscale. Native `MiniMaxH3ReferenceToVideo` uses same-aspect-ratio video
+and audio references when audio is present, not a guide. No turbo by default;
+strength 1.0 is the creator setting, while 30 steps is an unverified local default,
+not a creator recommendation. Opt-in `--type restore` downloads only its
+adapter; `--type restore_base` downloads the separate ~21 GB base. Neither is in
+default/all/12gb groups. Strict mode requires exact 24 FPS CFR inputs (the unchanged
+23.976 FPS FL2VA default is rejected). Optional **Normalize input** resamples
+arbitrary FPS/VFR at unchanged playback speed, pads to native `17n+5` frames,
+then trims the enhanced tail back to source duration (whole-frame rounding).
+Choose native 24 FPS or match source rate (VFR uses its average); dropped motion
+cannot be recovered by matching FPS. Dimensions still require the 32-grid.
+It preserves all original audio tracks and their timeline
+by stream-copying them into the final MKV. No real GPU render or 12 GB feasibility
+is validated. Anonymous metadata is verified, but download returned HTTP 401;
+header compatibility remains unknown. Runtime checks every adapter key/shape
+and rejects full AdaLN for the pruned base, with no conversion.
+See [restoration setup, input rules and limitations](docs/RESTORATION.md).
+
+### Optional character swap
+
+**Character swap — independent Ref2VA pass** takes a reference image, source
+video and editable target-identifying prompt through native image+video
+conditioning. Baseline: **20 steps, strength 1.0, `res_multistep` / `simple`,
+turbo OFF**, no restoration LoRA. Strength 1.0 is the author setting; 20 steps
+is the requested application baseline, **not a model-card recommendation**.
+Optional **Ref2VA turbo** sets **8 steps (disabled control)**, **Euler/simple**,
+shifts **12/3**, and fixed turbo strength **1.0** before the character LoRA.
+Character strength stays independently editable at default **1.0**. Turning
+turbo off restores **20 editable steps**; the backend receives `use_turbo=False`
+by default and uses `effective_steps` (8 when enabled, otherwise requested steps).
+Source dimensions are preserved with no resizing controls: **0.4 MP is not
+forced**, and long/high-resolution clips can exhaust memory.
+
+Original image/video copies persist and remain downloadable. Source must be
+**exactly 24 fps CFR, `17n+5` frames, 32-aligned dimensions and zero-start video**.
+There is **no character normalization, resampling or output-FPS control**;
+unsupported sources are rejected. Restoration's separate controls are unchanged.
+All source audio tracks are stream-copied into MKV, **not generated**; this does
+not guarantee exact face-only editing, temporal fidelity or lip sync.
+
+Opt-in `--type character_swap` downloads only the pinned
+`akatz-ai/MiniMax-H3-Character-Swap-LoRA` adapter; reuse the existing ~21 GB
+`restore_base` plus encoder/VAEs, not the restoration LoRA. Actual local **416
+tensor keys/shapes pass** against the pruned Ref2VA FP8 base; pinned base and
+character hashes match. Optional `--type ref2va_turbo` fetches
+`MiniMax-H3-Ref2VA-Acc-8Step_pruned_comfy.safetensors` (**1,725,921,392 bytes**),
+SHA-256 `6f18e1c2eccb14b37322607730f26b16bf1169b56cd098ea006cffaec43d1e39`.
+Its actual **578-tensor** header has **50-block AdaLN**, curve-compatible input
+**8** / output **96,768**, **not full-width**. Its local checksum and every target
+pass ordered turbo-first stack validation, including matching **32× PDD head
+weight/bias banks**. Unmatched shapes and full-width AdaLN patches fail preflight.
+**No GPU render is validated**. No downloads are needed for the current local work.
+Official training used a pruned INT8 base;
+the user workflow's fused/GGUF/custom-pack runtime is not blindly imported, and
+`workflows/CharacterSwap.json` is untouched. The adapter's **Community License**
+has territorial limits, unlike Apache-2.0. See
+[pinned provenance, setup and limitations](docs/CHARACTER_SWAP.md).
 
 The optional Silveroxides DARE-TIES pruned v1 adapter
 (`silveroxides_dareties_pruned_v1`) is the same pruned AdaLN-8 architecture and

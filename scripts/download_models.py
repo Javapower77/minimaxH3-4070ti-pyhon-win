@@ -14,6 +14,7 @@ Examples:
     python scripts/download_models.py --type dasiwa
     python scripts/download_models.py --type dasiwa_v2
     python scripts/download_models.py --type dmad
+    python scripts/download_models.py --type dmad_dareties
     python scripts/download_models.py --type dmad_hyperflow
     python scripts/download_models.py --type pdmd_dmad
     python scripts/download_models.py --type h100

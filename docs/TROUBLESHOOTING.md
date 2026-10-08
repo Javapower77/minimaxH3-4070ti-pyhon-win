@@ -1,5 +1,43 @@
 # Troubleshooting
 
+## Diagnostic logs and unexpectedly slow sampling
+
+- UI and generation CLI initialize `logs/application.log` once. It rotates at
+  5 MiB with five backups. Events contain a `request_id`, worker `prompt_id`,
+  safe workflow metadata (base/adapter filenames and byte sizes, geometry,
+  frames, steps, sampler, shifts and optional nodes), stage durations and errors
+  with tracebacks. Prompts, request bodies and reference media are not recorded;
+  credentials are redacted in rendered messages and tracebacks.
+- Newly launched workers write `logs/comfyui-worker.log`, also 5 MiB/five backups.
+  A reader owns rotation rather than handing an open rotating file to the child.
+  Existing workers are reused without stopping them or moving/deleting their log:
+  they continue writing `.runtime/ComfyUI/comfyui-worker.log` until their next
+  normal launch. Restart only after active jobs have finished to load new code.
+- `worker_stats` is a read-only `/system_stats` snapshot at submission,
+  completion and at most every 30 seconds during work. It includes host RAM
+  and worker GPU allocator stats; these are not the same as system-wide NVIDIA
+  VRAM usage. Snapshot failures are nonfatal. No diagnostic submits GPU work.
+- Compare **identical** base, adapters/strengths, width×height, frame count, NFE,
+  optional passes, worker flags and concurrent workloads. `sample_progress`
+  separates first-step latency (includes model initialization/weight staging)
+  from subsequent step intervals; `node_end` separates encoding, sampling,
+  VAE decoding and output encoding. `generation_end` includes lock/load wait
+  and all stages, while `worker_complete` measures the submitted worker wait.
+- A high elapsed time on step 1 does not prove the sampler stalled. The last
+  completed step can stay unchanged during a long next step; heartbeat elapsed
+  continues increasing. A screenshot's overlay timer and last step timestamp
+  can therefore differ. Diagnostic heartbeat events report both request and
+  current-node elapsed time without nesting stale elapsed labels.
+- On a 12 GB GPU, a ~21 GB FP8 transformer plus ~16 GB text encoder must stream
+  through CPU RAM. Near-zero free host RAM, substantial committed memory and
+  another model worker are evidence of memory pressure; paging/offload or GPU
+  contention remain hypotheses until measured. Check OS paging/disk activity
+  and NVIDIA stats before changing CUDA, dependencies, offload or model settings.
+
+`logs/` is ignored by Git. Review logs before sharing: third-party worker output
+can include local filenames and error details even though application metadata
+omits prompts/media. Old worker logs predate the redaction policy.
+
 ## `CUDA was requested but no CUDA device is available`
 
 - `nvidia-smi` must show an H100.

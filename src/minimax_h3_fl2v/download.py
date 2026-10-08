@@ -19,8 +19,25 @@ from huggingface_hub import get_token, hf_hub_download, snapshot_download
 import requests
 
 from .assets import (
+    CHARACTER_SWAP_LORA_FILE,
+    CHARACTER_SWAP_LORA_URL,
+    CHARACTER_SWAP_LORA_SHA256,
+    CHARACTER_SWAP_LORA_SIZE,
     DEFAULT_COMFY_ROOT,
     ROOT,
+    RESTORE_FILE,
+    RESTORE_URL,
+    RESTORE_SHA256,
+    RESTORE_SIZE,
+    REF2VA_MODEL_REPO,
+    REF2VA_MODEL_REVISION,
+    REF2VA_MODEL_FILE,
+    REF2VA_MODEL_SHA256,
+    REF2VA_MODEL_SIZE,
+    REF2VA_TURBO_FILE,
+    REF2VA_TURBO_URL,
+    REF2VA_TURBO_SHA256,
+    REF2VA_TURBO_SIZE,
     LATENT_NODE_BASE_URL,
     LATENT_NODE_FILES,
     LATENT_UPSCALER_FILE,
@@ -68,6 +85,10 @@ MODEL_TYPES = (
     "pruned",
     "postprocess",
     "latent_upscaler",
+    "restore",
+    "restore_base",
+    "character_swap",
+    "ref2va_turbo",
     "backend",
     "base",
     "loras",
@@ -77,6 +98,7 @@ MODEL_TYPES = (
     "dasiwa_v2",
     "dmad",
     "dmad_hyperflow",
+    "dmad_dareties",
     "pdmd_dmad",
     "lightx2v",
     "12gb",
@@ -96,6 +118,7 @@ LORA_GROUPS = {
     "dasiwa_v2": ("dasiwa_multistep_v2_r128_pruned",),
     "dmad": ("dmad_4step_lora_critic",),
     "dmad_hyperflow": ("dasiwa_dmad_hyperflow_4step_r256",),
+    "dmad_dareties": ("dmad_full_dareties_v4_step600",),
     "pdmd_dmad": ("dasiwa_pdmd_dmad_4step_r256",),
     "lightx2v": (
         "fl2va_turbo_8step_768p",
@@ -252,15 +275,15 @@ def download_loras(config, *, ids: list[str] | None = None) -> list[Path]:
 
 
 def _download_lora(config, spec: LoRASpec) -> Path | None:
-    if not spec.filename or (not spec.repo and not spec.download_url):
-        logger.warning("Skipping %s: no repo or download_url", spec.id)
-        return None
-    dest = config.lora_dir / spec.filename
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists():
+    dest = spec.resolved_path(config.lora_dir)
+    if dest is not None and dest.is_file():
         _verify_sha256(dest, spec.sha256)
         logger.info("LoRA already present: %s", dest)
         return dest
+    if dest is None or not spec.filename or (not spec.repo and not spec.download_url):
+        logger.warning("Skipping %s: no repo or download_url", spec.id)
+        return None
+    dest.parent.mkdir(parents=True, exist_ok=True)
     if spec.download_url:
         return download_url_file(spec.download_url, dest, expected_sha256=spec.sha256)
     logger.info("Downloading %s/%s", spec.repo, spec.filename)
@@ -268,11 +291,14 @@ def _download_lora(config, spec: LoRASpec) -> Path | None:
         hf_hub_download(
             repo_id=spec.repo,
             filename=spec.filename,
-            local_dir=str(config.lora_dir),
+            local_dir=str(dest.parent),
             token=_token(config),
         )
     )
     _verify_sha256(path, spec.sha256)
+    if path.resolve() != dest.resolve():
+        shutil.copy2(path, dest)
+        return dest
     return path
 
 
@@ -350,6 +376,69 @@ def download_latent_upscaler(comfy_root: Path | None = None) -> list[Path]:
     return paths
 
 
+def download_restore(comfy_root: Path | None = None) -> list[Path]:
+    """Download only Nugus's pinned restoration adapter; no base or turbo."""
+    root = (comfy_root or DEFAULT_COMFY_ROOT) / "models" / "loras"
+    destination = root / RESTORE_FILE
+    if destination.exists():
+        if destination.stat().st_size != RESTORE_SIZE:
+            raise RuntimeError("Existing restoration checkpoint has incorrect size; retained unchanged.")
+        _verify_sha256(destination, RESTORE_SHA256)
+        return [destination]
+    return [download_url_file(RESTORE_URL, root / RESTORE_FILE,
+                             expected_sha256=RESTORE_SHA256, expected_size=RESTORE_SIZE)]
+
+
+def download_character_swap(comfy_root: Path | None = None) -> list[Path]:
+    """Download only the pinned character-swap adapter; reuse restore_base separately."""
+    root = (comfy_root or DEFAULT_COMFY_ROOT) / "models" / "loras"
+    destination = root / CHARACTER_SWAP_LORA_FILE
+    if destination.exists():
+        if destination.stat().st_size != CHARACTER_SWAP_LORA_SIZE:
+            raise RuntimeError("Existing character-swap checkpoint has incorrect size; retained unchanged.")
+        _verify_sha256(destination, CHARACTER_SWAP_LORA_SHA256)
+        return [destination]
+    return [download_url_file(
+        CHARACTER_SWAP_LORA_URL, destination,
+        expected_sha256=CHARACTER_SWAP_LORA_SHA256,
+        expected_size=CHARACTER_SWAP_LORA_SIZE,
+    )]
+
+
+def download_ref2va_turbo(comfy_root: Path | None = None) -> list[Path]:
+    """Download only the optional pinned Ref2VA turbo adapter; no base or swap."""
+    root = (comfy_root or DEFAULT_COMFY_ROOT) / "models" / "loras"
+    destination = root / REF2VA_TURBO_FILE
+    if destination.exists():
+        if destination.stat().st_size != REF2VA_TURBO_SIZE:
+            raise RuntimeError("Existing Ref2VA turbo checkpoint has incorrect size; retained unchanged.")
+        _verify_sha256(destination, REF2VA_TURBO_SHA256)
+        return [destination]
+    return [download_url_file(
+        REF2VA_TURBO_URL, destination,
+        expected_sha256=REF2VA_TURBO_SHA256,
+        expected_size=REF2VA_TURBO_SIZE,
+    )]
+
+
+def download_restore_base(comfy_root: Path | None = None) -> list[Path]:
+    """Download only the large pinned Ref2VA FP8-scaled transformer."""
+    root = (comfy_root or DEFAULT_COMFY_ROOT) / "models" / "diffusion_models"
+    destination = root / REF2VA_MODEL_FILE
+    if destination.exists():
+        if destination.stat().st_size != REF2VA_MODEL_SIZE:
+            raise RuntimeError("Existing Ref2VA checkpoint has incorrect size; retained unchanged.")
+        _verify_sha256(destination, REF2VA_MODEL_SHA256)
+        return [destination]
+    return [download_url_file(
+        f"https://huggingface.co/{REF2VA_MODEL_REPO}/resolve/{REF2VA_MODEL_REVISION}"
+        f"/diffusion_models/{REF2VA_MODEL_FILE}",
+        root / REF2VA_MODEL_FILE,
+        expected_sha256=REF2VA_MODEL_SHA256,
+        expected_size=REF2VA_MODEL_SIZE,
+    )]
+
+
 def known_model_types(config=None) -> tuple[str, ...]:
     cfg = config or load_config()
     catalog_ids = tuple(spec.id for spec in cfg.catalog if not spec.is_base)
@@ -420,6 +509,14 @@ def run_downloads(
             download_postprocess_models(comfy_root)
         elif item == "latent_upscaler":
             download_latent_upscaler(comfy_root)
+        elif item == "restore":
+            download_restore(comfy_root)
+        elif item == "restore_base":
+            download_restore_base(comfy_root)
+        elif item == "character_swap":
+            download_character_swap(comfy_root)
+        elif item == "ref2va_turbo":
+            download_ref2va_turbo(comfy_root)
         elif item == "base":
             download_base_model(cfg)
         elif item == "loras":
@@ -437,7 +534,9 @@ def _download_providers(types: list[str], config, lora_ids: list[str] | None = N
     providers: set[str] = set()
     wanted: set[str] = set()
     for item in types:
-        if item in {"base", "pruned", "postprocess", "latent_upscaler"}:
+        if item == "restore":
+            providers.add("civitai")
+        elif item in {"base", "pruned", "postprocess", "latent_upscaler", "restore_base", "character_swap", "ref2va_turbo"}:
             providers.add("huggingface")
         elif item == "loras":
             wanted.update(lora_ids if lora_ids else (spec.id for spec in config.catalog if not spec.is_base))
@@ -476,6 +575,10 @@ def _download_credentials(types: list[str], config, lora_ids=None, *, no_input: 
             if existing:
                 if provider == "huggingface":
                     config.hf_token = existing
+                    # URL downloads consume environment/cache credentials, not config.
+                    if os.environ.get(variable) != existing:
+                        changed_env[variable] = os.environ.get(variable)
+                        os.environ[variable] = existing
                 continue
             if no_input or not sys.stdin.isatty():
                 continue
@@ -512,6 +615,10 @@ Model types:
   pruned         FP8 pruned transformer, NVFP4 text encoder, video/audio VAEs
   postprocess    Real-ESRGAN, RIFE 4.25 Lite, CodeFormer, face-detection weights
     latent_upscaler Optional learned H3 latent upscaler FP16 and pinned node code
+    restore        only Nugus Restore / Enhance / Improve rank16 (optional)
+    restore_base   only Ref2VA FP8 transformer (~20.96 GB; optional)
+        character_swap only pinned Character Swap LoRA (optional; base via restore_base)
+    ref2va_turbo   only pinned Ref2VA Acc 8-step LoRA (optional; no base)
   backend        pruned + postprocess
   base           full Diffusers FL2VA snapshot (optional, H100 / non-pruned LoRAs)
   loras          every catalogued LoRA with a download source
@@ -520,6 +627,7 @@ Model types:
   dasiwa         Dasiwa Civitai v1 ranks 48/96/144/512
     dasiwa_v2      Dasiwa turbo-multistep-v2 Hyperflow+EMA600 pruned r128
     dmad           Original DMAD 4-step lora_critic (not full_critic)
+    dmad_dareties   DMAD Full DARE-TIES v4 step600 Civitai LoRA
     dmad_hyperflow  Dasiwa DMAD + Hyperflow 4-step r256 Civitai blend
     pdmd_dmad      Dasiwa PDMD + DMAD 4-step r256 Civitai blend
   lightx2v       official LightX2V / larryvrh turbo LoRAs

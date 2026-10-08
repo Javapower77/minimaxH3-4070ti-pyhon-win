@@ -13,6 +13,7 @@ from typing import Callable, Optional
 import torch
 
 from .config import AppConfig, GenerationRequest, LoRASpec
+from .diagnostics import event, file_metadata, stage, traced_generation
 from .frames import duration_to_frames, frames_to_duration
 from .lora import LoadedLoRA, validate_lora_workflow
 from .media import fit_image_without_crop, load_rgb_image, save_result_video
@@ -70,6 +71,7 @@ class _ProgressBridge:
         self.current = 0
         self.callback = callback
         self.started = started
+        self.last_step_time = started
 
     def __enter__(self):
         return self
@@ -82,6 +84,13 @@ class _ProgressBridge:
     def update(self, amount: int = 1):
         self.current = min(self.total, self.current + int(amount))
         elapsed = time.perf_counter() - self.started
+        interval = self.started + elapsed - self.last_step_time
+        event(
+            logger, "sample_progress", backend="diffusers", value=self.current,
+            total=self.total, elapsed_seconds=elapsed, interval_seconds=interval,
+            first_step_includes_loading=self.current == 1,
+        )
+        self.last_step_time = self.started + elapsed
         fraction = self.current / self.total
         self.callback(
             0.22 + 0.58 * fraction,
@@ -407,6 +416,7 @@ class MiniMaxH3Engine:
         self._active_adapter_weights = ()
         return "base"
 
+    @traced_generation
     def generate(
         self,
         request: GenerationRequest,
@@ -434,9 +444,42 @@ class MiniMaxH3Engine:
                     raise
         if not self.ready:
             report(0.03, "🔵 Loading full Diffusers MiniMax-H3 components…")
-            self.load()
+            with stage(logger, "pipeline_load"):
+                self.load()
         with self._lock:
             return self._generate_unlocked(request, progress_callback=report)
+
+    @traced_generation
+    def enhance_restoration(self, request, progress_callback: Optional[ProgressCallback] = None):
+        """Serialize the independent Ref2VA pass with all FL2VA generations."""
+        from .restoration import RestorationBackend
+
+        with self._lock:
+            self._release_cuda_memory()
+            self.status = "enhancing with Ref2VA restoration"
+            try:
+                result = RestorationBackend(self.config).enhance(request, progress_callback)
+                self.status = "ready"
+                return result
+            except Exception:
+                self.status = "Restoration enhancement failed; original retained"
+                raise
+
+    @traced_generation
+    def swap_character(self, request, progress: Optional[ProgressCallback] = None):
+        """Serialize character swapping with restoration and FL2VA generation."""
+        from .character_swap import CharacterSwapBackend
+
+        with self._lock:
+            self._release_cuda_memory()
+            self.status = "swapping character with Ref2VA backend"
+            try:
+                result = CharacterSwapBackend(self.config).swap(request, progress=progress)
+                self.status = "ready"
+                return result
+            except Exception:
+                self.status = "Character swap failed; originals retained"
+                raise
 
     def _generate_unlocked(
         self,
@@ -474,6 +517,7 @@ class MiniMaxH3Engine:
             ),
         )
         timings["lora_load"] = time.perf_counter() - stage_started
+        event(logger, "stage_end", stage="lora_load", duration_seconds=timings["lora_load"])
 
         first = load_rgb_image(request.first_image) if request.first_image else None
         last = load_rgb_image(request.last_image) if request.last_image else None
@@ -497,6 +541,20 @@ class MiniMaxH3Engine:
             last = fit_image_without_crop(last, width, height)
 
         frames = duration_to_frames(request.duration_seconds, fps=self.config.fps)
+        event(
+            logger, "generation_metadata", backend="diffusers", base=self.config.local_dir.name,
+            workflow=self.config.workflow, width=width, height=height, frames=frames, nfe=nfe,
+            video_shift=video_shift, audio_shift=audio_shift,
+            adapters=[
+                {**file_metadata(path), "strength": weight}
+                for path, weight in [
+                    (spec.resolved_path(self.config.lora_dir), request.lora_scale),
+                    *request.extra_loras,
+                ] if path is not None
+            ],
+            cpu_offload=self.config.cpu_offload,
+            memory_reserve_margin=self.config.memory_reserve_margin,
+        )
         prompt = expand_prompt(request.prompt, structured=request.structured_prompt)
         # MiniMaxH3Scheduler counts the terminal sigma point, so N NFE needs N+1.
         scheduler_grid_points = int(nfe) + 1
@@ -532,6 +590,7 @@ class MiniMaxH3Engine:
                     **kwargs,
                 )
             elapsed = time.perf_counter() - started
+            event(logger, "stage_end", stage="pipeline", duration_seconds=elapsed)
 
             report(0.92, f"🎞️ Encoding H.264 + AAC MP4 · elapsed {elapsed:.1f}s…")
             encode_started = time.perf_counter()
@@ -540,6 +599,7 @@ class MiniMaxH3Engine:
             output_path = self.config.output_dir / filename
             save_result_video(result, output_path, fps=self.config.fps)
             timings["mp4_encode"] = time.perf_counter() - encode_started
+            event(logger, "stage_end", stage="mp4_encode", duration_seconds=timings["mp4_encode"])
         except torch.OutOfMemoryError as exc:
             self.status = "CUDA OOM — memory released; retry with 544p or shorter duration"
             logger.exception("CUDA OOM at %sx%s/%sf; %s", width, height, frames, self._cuda_memory_summary())

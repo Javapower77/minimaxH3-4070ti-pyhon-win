@@ -97,6 +97,45 @@ def test_unknown_type_raises():
         resolve_types(model_type="not_a_model", base=False, loras=False, all_flag=False)
 
 
+def test_dmad_dareties_type_and_local_download_destination(tmp_path, monkeypatch):
+    cfg = load_config()
+    cfg.lora_dir = tmp_path / "app-loras"
+    spec = cfg.lora_by_id("dmad_full_dareties_v4_step600")
+    spec.local_path = tmp_path / "worker/models/loras" / spec.filename
+    assert LORA_GROUPS["dmad_dareties"] == (spec.id,)
+    assert LORA_GROUPS["dmad"] == ("dmad_4step_lora_critic",)
+    for selected in ("dmad_dareties", spec.id):
+        assert resolve_types(model_type=selected, base=False, loras=False, all_flag=False,
+                             catalog_ids=(spec.id,)) == [selected]
+    captured = []
+
+    def fake_download(url, destination, *, expected_sha256=None):
+        captured.append((url, destination, expected_sha256))
+        destination.write_bytes(b"synthetic weights")
+        return destination
+
+    monkeypatch.setattr("minimax_h3_fl2v.download.download_url_file", fake_download)
+    assert download_loras(cfg, ids=list(LORA_GROUPS["dmad_dareties"])) == [spec.local_path]
+    assert captured == [(spec.download_url, spec.local_path, spec.sha256)]
+    assert not cfg.lora_dir.exists()
+    spec.sha256 = hashlib.sha256(b"synthetic weights").hexdigest()
+    monkeypatch.setattr("minimax_h3_fl2v.download.download_url_file", lambda *a, **k: pytest.fail("Existing local file downloaded"))
+    assert download_loras(cfg, ids=[spec.id]) == [spec.local_path]
+    spec.sha256 = "0" * 64
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        download_loras(cfg, ids=[spec.id])
+    assert spec.local_path.read_bytes() == b"synthetic weights"
+
+
+def test_local_only_catalog_file_reused_without_download_source(tmp_path):
+    from minimax_h3_fl2v.config import AppConfig, LoRASpec
+
+    source = tmp_path / "resident.safetensors"
+    source.write_bytes(b"local")
+    spec = LoRASpec(id="local", name="Local", local_path=source)
+    assert download_loras(AppConfig(catalog=[spec]), ids=[spec.id]) == [source]
+
+
 def test_dmad_type_and_original_checkpoint_download(monkeypatch, tmp_path):
     cfg = load_config()
     cfg.lora_dir = tmp_path

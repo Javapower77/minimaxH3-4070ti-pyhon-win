@@ -202,6 +202,8 @@ def test_ui_reset_and_generation_wiring(monkeypatch, tmp_path):
         assert request.upscale_factor == 2.0
         assert request.detailer_strength == 0.0
         assert outputs[0] == "output.mp4"
-        assert len(outputs) == len(generate.outputs) == 4
+        assert outputs[-1] == "output.mp4"
+        assert isinstance(generate.outputs[-1], ui.gr.State)
+        assert len(outputs) == len(generate.outputs) == 5
     finally:
         demo.close()

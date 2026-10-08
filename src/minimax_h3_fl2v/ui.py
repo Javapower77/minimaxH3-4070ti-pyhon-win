@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import secrets
 import shutil
@@ -319,6 +320,13 @@ def _preset_for_megapixels(megapixels: float) -> str:
 def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
     config = config or load_config()
     engine = get_engine(config)
+    try:
+        from .character_swap import CHARACTER_SWAP_PROMPT
+    except ModuleNotFoundError as exc:
+        if exc.name != f"{__package__}.character_swap":
+            raise
+        # Keep the existing studio usable while the independent backend lands.
+        CHARACTER_SWAP_PROMPT = ""
 
     def load_model(lora_id: str):
         try:
@@ -469,7 +477,73 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
             if str(seed_mode).lower() == "random each generation"
             else f"Fixed seed used: {result.seed}."
         )
-        return str(result.path), summary, result.seed, seed_note
+        return str(result.path), summary, result.seed, seed_note, str(result.path)
+
+    def enhance_restoration(source_mode, uploaded_video, strength, steps, restoration_seed,
+                    normalize_input=False, output_fps="native", generated_path=None,
+                    progress=gr.Progress(track_tqdm=False)):
+        from .restoration import RestorationFailure, RestorationRequest
+
+        source = (_file_path(uploaded_video) if source_mode == "Uploaded video"
+                  else _file_path(generated_path))
+        if source is None:
+            return gr.update(), gr.update(), "Select an uploaded video or generate a video first.", "Restoration source required."
+        try:
+            result = engine.enhance_restoration(
+                RestorationRequest(source=source, strength=float(strength), steps=int(steps), seed=int(restoration_seed),
+                           normalize_input=normalize_input, output_fps=output_fps),
+                progress_callback=lambda fraction, message: progress(fraction, desc=message),
+            )
+            return str(result.path), str(result.original), (
+                f"Ref2VA restoration · {result.info.width}×{result.info.height} · {result.info.frames} frames · {float(result.info.fps):.6g} fps · "
+                f"steps={steps} · strength={strength:g} · seed={restoration_seed} · {result.elapsed_seconds:.1f}s\n"
+                f"Enhanced: {result.path}\nOriginal: {result.original}\n"
+                f"{result.normalization_summary}\n"
+                "Original audio packet hashes verified; no audio re-encoding. GPU/12 GB rendering remains unvalidated."
+            ), "Restoration complete; original audio preserved."
+        except RestorationFailure as exc:
+            logger.exception("Restoration enhancement failed")
+            return gr.update(), str(exc.original), str(exc), "Restoration failed; original retained."
+        except Exception as exc:
+            logger.exception("Restoration request failed")
+            return gr.update(), gr.update(), f"Restoration request rejected: {exc}. Source unchanged: {source}", "Restoration request rejected; source unchanged."
+
+    def swap_character(reference_image, source_video, prompt, steps=20, strength=1.0,
+                       seed=42, use_turbo=False,
+                       progress=gr.Progress(track_tqdm=False)):
+        image = _file_path(reference_image)
+        source = _file_path(source_video)
+        if image is None or source is None:
+            return (gr.update(), gr.update(), gr.update(),
+                    "Select a reference image and a source video.",
+                    "Character swap sources required.")
+        try:
+            from .character_swap import CharacterSwapFailure, CharacterSwapRequest
+        except ImportError as exc:
+            return (gr.update(), gr.update(), gr.update(),
+                    f"Character swap backend unavailable: {exc}",
+                    "Character swap backend unavailable; sources unchanged.")
+        try:
+            result = engine.swap_character(
+                CharacterSwapRequest(
+                    source_video=source, reference_image=image, prompt=str(prompt),
+                    steps=int(steps), strength=float(strength),
+                    seed=_resolve_seed("Fixed", seed), use_turbo=bool(use_turbo),
+                ),
+                progress=lambda fraction, message: progress(fraction, desc=message),
+            )
+            return (str(result.output_path), str(result.original_path),
+                    str(result.original_image_path), result.message,
+                    "Character swap complete; originals retained.")
+        except CharacterSwapFailure as exc:
+            logger.exception("Character swap failed")
+            return (gr.update(), str(exc.original_path), str(exc.original_image_path),
+                    str(exc), "Character swap failed; originals retained.")
+        except Exception as exc:
+            logger.exception("Character swap request failed")
+            return (gr.update(), gr.update(), gr.update(),
+                    f"Character swap request rejected: {exc}. Sources unchanged: {source}; {image}",
+                    "Character swap request rejected; sources unchanged.")
 
     theme = gr.themes.Soft(
         primary_hue="amber",
@@ -482,6 +556,8 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
     )
 
     with gr.Blocks(title=config.title) as demo:
+        # Session-local server original, not a transcoded preview or restoration result.
+        last_generated = gr.State(value=None)
         gr.Markdown(
             f"# {config.title}\n"
             "Local **MiniMax-H3 FL2VA** — first/last-frame to **video + stereo audio**. "
@@ -596,7 +672,7 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                         info="0 disables sharpening; 0.2–0.35 is conservative for video.",
                     )
                     output_fps = gr.Radio(
-                        choices=["23.976 fps", "29.97 fps", "60 fps", "120 fps"],
+                        choices=["23.976 fps", "24 fps", "29.97 fps", "60 fps", "120 fps"],
                         value="23.976 fps",
                         label="Output frame rate",
                         info="29.97/60/120 use RIFE; higher rates require more time and RAM.",
@@ -673,6 +749,90 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
             lines=5,
             elem_id="run-summary",
         )
+
+        with gr.Accordion("Restore / Enhance / Improve — Nugus rank16 Ref2VA restoration", open=False):
+            gr.Markdown(
+                "**Optional second pass, never automatic.** Uses a separate pruned Ref2VA FP8 model, "
+                "Nugus Restore / Enhance / Improve BF16 rank16; reuses the installed encoder/VAEs. No turbo by default. "
+                "Native `MiniMaxH3ReferenceToVideo` uses a same-aspect-ratio video reference and source audio if present, not a guide. "
+                "Strength **1.0** is the creator setting; **30 steps** is an unverified local default, not a creator recommendation. "
+                "Source must be **24 fps CFR**, **17n+5 frames**, and **32-grid dimensions**. "
+                "Strict mode rejects other rates. Optional **Normalize input** resamples arbitrary FPS/VFR to native 24 fps without changing speed, "
+                "pads the reference then trims only the enhanced tail. Frames may be dropped/duplicated; temporal detail can be lost. No resizing. "
+                "Original video is retained; all original audio is stream-copied to a downloadable **MKV**, never replaced by generated audio. "
+                "Download optional types `restore` and `restore_base` separately. See `docs/RESTORATION.md`. "
+                "Anonymous API metadata is verified; download returned HTTP 401 and header compatibility is unknown. "
+                "Runtime checks every adapter key/shape; full AdaLN is rejected for the pruned base, with no conversion. "
+                "**No successful GPU render or 12 GB fit is claimed.**"
+            )
+            restoration_source_mode = gr.Radio(choices=["Generated result", "Uploaded video"], value="Generated result", label="Restoration source")
+            restoration_upload = gr.File(label="Source video for restoration", type="filepath", file_types=[".mp4", ".mkv", ".mov", ".webm"])
+            restoration_normalize = gr.Checkbox(value=False, label="Normalize input (FPS/VFR → native 24 fps; temporal loss possible)")
+            restoration_fps = gr.Radio(choices=[("Native 24 fps", "native"), ("Match source rate (VFR: average)", "source")],
+                               value="native", label="Restoration output frame rate")
+            with gr.Row():
+                restoration_strength = gr.Slider(0.05, 2.0, value=1.0, step=0.05, label="Restoration strength (creator: 1.0)")
+                restoration_steps = gr.Slider(4, 50, value=30, step=1, label="Restoration steps (unverified local default 30)")
+                restoration_seed = gr.Number(value=42, precision=0, label="Restoration seed")
+            restoration_button = gr.Button("Restore / Enhance / Improve source", variant="secondary")
+            restoration_status = gr.Textbox(label="Restoration progress / current task", value="Ready for restoration.",
+                                    interactive=False, elem_id="restoration-progress")
+            restoration_output = gr.File(label="Restored video (MKV, original audio streams)", interactive=False)
+            restoration_original = gr.File(label="Retained original source", interactive=False)
+            restoration_summary = gr.Textbox(label="Restoration result and normalization summary", lines=5, interactive=False)
+            # Full is needed for Gradio's native bar/task/elapsed display. Target
+            # only this area, never overlay the files or the detailed summary.
+            restoration_button.click(enhance_restoration, inputs=[restoration_source_mode, restoration_upload, restoration_strength, restoration_steps, restoration_seed, restoration_normalize, restoration_fps, last_generated],
+                             outputs=[restoration_output, restoration_original, restoration_summary, restoration_status],
+                             show_progress="full", show_progress_on=restoration_status)
+
+        with gr.Accordion("Character swap — independent Ref2VA pass", open=False):
+            gr.Markdown(
+                "**Optional, independent pass.** Upload a reference image and a source video. "
+                "Preserves source dimensions; no canvas override or restoration LoRA. "
+                "Requires exactly **24 fps CFR**, **32-aligned dimensions**, **17n+5 frames**, "
+                "and a **zero-start timeline**; no normalization or resampling. "
+                "Optional **Ref2VA turbo** defaults off: 8 fixed steps, Euler/simple, shifts 12/3, "
+                "turbo strength fixed at 1.0 before the independently editable character adapter. "
+                "Normal mode uses 20 editable steps and res_multistep/simple. "
+                "Pinned turbo hashes and ordered PDD-head shapes are validated locally; GPU rendering is unvalidated. "
+                "Source-canvas processing can exhaust VRAM on long/high-resolution clips. "
+                "Experimental character replacement, not guaranteed exact face-only editing. "
+                "Original image and video remain downloadable, including after a backend failure."
+            )
+            character_image = gr.File(label="Character reference image", type="filepath",
+                                      file_types=[".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"])
+            character_video = gr.File(label="Character swap source video", type="filepath",
+                                      file_types=[".mp4", ".mkv", ".mov", ".webm"])
+            character_prompt = gr.Textbox(label="Character swap prompt", lines=5,
+                                          value=CHARACTER_SWAP_PROMPT, interactive=True)
+            character_turbo = gr.Checkbox(value=False, label="Ref2VA turbo (8 fixed steps)")
+            with gr.Row():
+                character_steps = gr.Slider(4, 50, value=20, step=1, label="Character swap steps",
+                                            interactive=True)
+                character_strength = gr.Slider(0.05, 2.0, value=1.0, step=0.05,
+                                              label="Character swap strength", interactive=True)
+                character_seed = gr.Number(value=42, precision=0, label="Character swap seed")
+            character_turbo.change(
+                lambda enabled: gr.update(value=8 if enabled else 20, interactive=not enabled),
+                inputs=[character_turbo], outputs=[character_steps], queue=False,
+            )
+            character_button = gr.Button("Swap character", variant="secondary")
+            character_status = gr.Textbox(label="Character swap progress / current task",
+                                          value="Ready for character swap.", interactive=False,
+                                          elem_id="character-swap-progress")
+            character_output = gr.File(label="Character swap result", interactive=False)
+            character_original = gr.File(label="Retained character swap original video", interactive=False)
+            character_original_image = gr.File(label="Retained character swap original image", interactive=False)
+            character_summary = gr.Textbox(label="Character swap result summary", lines=5, interactive=False)
+            character_button.click(
+                swap_character,
+                inputs=[character_image, character_video, character_prompt, character_steps,
+                    character_strength, character_seed, character_turbo],
+                outputs=[character_output, character_original, character_original_image,
+                         character_summary, character_status],
+                show_progress="full", show_progress_on=character_status,
+            )
 
         lora_id.change(
             lambda lora, count, *scales: (
@@ -793,7 +953,7 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
                 latent_upscale_factor,
                 latent_upscale_device,
             ],
-            outputs=[video, summary, seed, seed_note],
+            outputs=[video, summary, seed, seed_note, last_generated],
             show_progress="full",
             show_progress_on=status,
         )
@@ -815,7 +975,10 @@ def build_app(config: Optional[AppConfig] = None) -> gr.Blocks:
 
 
 def main(argv: list[str] | None = None) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    from .diagnostics import initialize_logging, event
+
+    log_path = initialize_logging()
+    event(logger, "application_start", entrypoint="ui", log_file=str(log_path))
     enforce_offline_runtime()
     config = load_config()
     demo = build_app(config)

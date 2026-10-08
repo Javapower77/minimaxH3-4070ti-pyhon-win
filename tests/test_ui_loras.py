@@ -21,6 +21,13 @@ def test_dmad_is_selectable_in_catalog():
     assert any(value == "dmad_4step_lora_critic" and "experimental" in label for label, value in choices)
 
 
+def test_dmad_dareties_is_separately_selectable_in_catalog():
+    choices = _lora_choices(load_config())
+    assert sum(value == "dmad_full_dareties_v4_step600" for _, value in choices) == 1
+    assert any(value == "dmad_full_dareties_v4_step600" and "experimental" in label for label, value in choices)
+    assert any(value == "dmad_4step_lora_critic" for _, value in choices)
+
+
 def test_dmad_hyperflow_is_separately_selectable_in_catalog():
     choices = _lora_choices(load_config())
     assert any(value == "dasiwa_dmad_hyperflow_4step_r256" and "Hyperflow" in label for label, value in choices)

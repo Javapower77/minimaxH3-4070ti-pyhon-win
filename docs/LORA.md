@@ -71,11 +71,64 @@ adapter plus whatever alpha the official loader applied.
 | `dmad_4step_lora_critic` | `dmad_minimax_h3_4step_lora_critic.safetensors` | 4 | r128 | 0.4 MP |
 | `dasiwa_dmad_hyperflow_4step_r256` | `minimax_h3_DMAD_Hyperflow_4step_r256_add_fro0995_turbo_lora.safetensors` | 4 | r256 | 0.4 MP |
 | `dasiwa_pdmd_dmad_4step_r256` | `minimax_h3_PDMD_DMAD_4step_r256_add_fro1_turbo_lora.safetensors` | 4 | r256 | 0.4 MP |
+| `dmad_full_dareties_v4_step600` | `minimax_h3_dmad_full_dareties_v4_step600_comfy.safetensors` | 8 | folded; r128/r384 | 0.4 MP |
 | `none` | — | 50 | — | 1.0 MP |
 
 Hub: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo),
 [larryvrh/MiniMax-H3-Turbo-Lora](https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora),
 and [silveroxides/MiniMax-H3_tests](https://huggingface.co/silveroxides/MiniMax-H3_tests).
+
+### DMAD Full DARE-TIES v4 step600 (experimental)
+
+Normal generation's Turbo dropdown includes `dmad_full_dareties_v4_step600`.
+This is a separate DMAD full-critic / larryvrh v4 merge, **not** the original
+paper `dmad_4step_lora_critic` and not the smaller `_fro` sibling.
+Source: [Civitai model 2837571, version 3391964](https://civitai.com/models/2837571?modelVersionId=3391964),
+release name `dmad_larryvrhv4_merge`, published 2026-10-08.
+
+| Property | Verified value |
+| --- | --- |
+| Exact file ID | `3281488` |
+| File | `minimax_h3_dmad_full_dareties_v4_step600_comfy.safetensors` |
+| Size | 3,913,285,640 bytes (about 3.64 GiB); API sizeKB × 1024 equals local size |
+| SHA-256 | `ca34641d06c4e714d27a8540fd20721ef5daf54e9d58fa8be169d33b2d2699a9` |
+| Actual tensors | 416 FP32 tensors; 208 native dotted A/B pairs: 156 rank128, 52 rank384 |
+| Metadata | `adaln=dropped`, `fc1_swap=yes`, `alpha_normalized=true`, `strength_folded=yes` |
+| Creator settings | 6–8 steps, `er_sde/lcm`, `simple`, strength 1.0, video/audio shifts 12/3 |
+| App settings | 8 steps, **Euler/simple**, strength 1.0, shifts 12/3, conservative 0.4 MP |
+
+The model card describes pruned/curve-form Comfy compatibility; the actual local
+header and base comparison confirm it rather than relying on the word “full.”
+Both established `validate_pruned_fl2va_lora` and `validate_adapter` checks pass.
+Every pair matches its base target and rank, including all 208 unambiguous
+flattened aliases derived from the base vocabulary. There are **zero AdaLN or
+direct `.diff`/`.diff_b` patches** in this file. The actual FL2VA base contains
+51 AdaLN weights with input width 8 (for example `[96768, 8]`), not full-width
+2688. Its verified SHA-256 is
+`12944c1f7791637e7de12208aef04da82bd26b95271b1b47d817364315ade993`.
+Alpha has already been folded into the factors; catalog alpha is documentation,
+not another multiplier or an instruction to convert the adapter.
+
+The catalog's `local_path` is
+`.runtime/ComfyUI/models/loras/minimax_h3_dmad_full_dareties_v4_step600_comfy.safetensors`.
+Relative paths resolve from the **repository root**, independent of the catalog
+location or working directory; absolute paths remain absolute. `local_path`
+takes precedence over `models/loras`. Sync preserves an already-resident file
+(also symlinks/hard links) without copying/unlinking it, but still checks live
+worker discovery. A different worker root uses the existing link/copy mechanism.
+
+Optional downloader selections are `--type dmad_dareties` or
+`--type dmad_full_dareties_v4_step600`; they verify and reuse the resolved local
+file. If absent, the pinned URL
+`https://civitai.com/api/download/models/3391964?fileId=3281488`
+downloads to that same resolved location and checks SHA-256. Like other sourced
+catalog adapters, it is included in explicit aggregate LoRA downloads, but not
+the default 12 GB download set.
+
+No GPU render or memory-fit claim is made; this FP32 adapter adds substantial
+RAM/loading pressure. TaoMate and original DMAD defaults, character swap, and
+restoration are unchanged. Euler is an app-supported alternative, not a claim
+that the creator's `er_sde/lcm` sampler was implemented.
 
 ### TaoMate FL2VA 3-step EMA: default 12 GB profile
 

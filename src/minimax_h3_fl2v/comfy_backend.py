@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -19,6 +20,7 @@ import websocket
 from PIL import Image
 
 from .config import AppConfig, GenerationRequest, LoRASpec, ROOT
+from .diagnostics import event, stage, traced_generation, workflow_metadata, start_worker_capture
 from .assets import LATENT_UPSCALER_FILE
 from .frames import duration_to_frames, frames_to_duration
 from .media import fit_image_without_crop, load_rgb_image
@@ -42,7 +44,7 @@ DEFAULT_FACE_RESTORE_MODEL = "codeformer.pth"
 ProgressCallback = Callable[[float, str], None]
 
 NODE_STAGES = {
-    "1": (0.08, "🔷 Loading pruned BF16 transformer"),
+    "1": (0.08, "🔷 Loading configured pruned transformer"),
     "2": (0.11, "🔤 Loading Qwen3-VL text encoder"),
     "3": (0.13, "🎞️ Loading video VAE"),
     "4": (0.14, "🔊 Loading audio VAE"),
@@ -67,6 +69,11 @@ NODE_STAGES = {
     "35": (0.94, "🎞️ Loading RIFE interpolation model"),
     "36": (0.95, "🏃 Interpolating output frames"),
     "37": (0.96, "🎯 Resampling target frame rate"),
+    "50": (0.15, "🎞️ Loading restoration source reference"),
+    "51": (0.16, "🎞️ Reading source video frames"),
+    "52": (0.19, "🧠 Encoding restoration prompt"),
+    "53": (0.20, "🎞️ Preparing restoration video latents"),
+    "54": (0.24, "🧭 Encoding source video/audio references"),
 }
 
 
@@ -130,14 +137,15 @@ class PrunedComfyBackend:
     ) -> None:
         report = progress_callback or (lambda fraction, message: None)
         if self._is_ready():
+            event(logger, "worker_reuse", endpoint=self.url)
             report(0.04, "🟣 Pruned worker ready · validating local models…")
             return
         report(0.02, "🟣 Starting isolated pruned ComfyUI worker…")
         self.validate_installation()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.input_dir.mkdir(parents=True, exist_ok=True)
-        log_path = self.root / "comfyui-worker.log"
-        log_handle = log_path.open("ab")
+        log_path = ROOT / "logs" / "comfyui-worker.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         command = [
             str(self._python_executable()),
             str(self.root / "main.py"),
@@ -166,17 +174,22 @@ class PrunedComfyBackend:
             process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             process_options["start_new_session"] = True
-        self.process = subprocess.Popen(
-            command,
-            cwd=self.root,
-            env=env,
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            **process_options,
-        )
+        event(logger, "worker_start", command=command, log_file=str(log_path),
+              reserve_vram_gb=self.config.comfy_reserve_vram_gb,
+              cache_none=self.config.comfy_cache_none, cpu_vae=self.config.comfy_cpu_vae)
+        with stage(logger, "worker_spawn"):
+            self.process = subprocess.Popen(
+                command, cwd=self.root, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+                bufsize=1, **process_options,
+            )
+            start_worker_capture(self.process, log_path)
+        startup_started = time.perf_counter()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._is_ready():
+                event(logger, "worker_ready", pid=self.process.pid,
+                    duration_seconds=time.perf_counter() - startup_started)
                 logger.info("Pruned ComfyUI worker ready at %s", self.url)
                 report(0.04, "🟣 Pruned worker started · validating local models…")
                 return
@@ -184,6 +197,22 @@ class PrunedComfyBackend:
                 raise RuntimeError(f"Pruned ComfyUI worker exited. See {log_path}")
             time.sleep(0.5)
         raise RuntimeError(f"Timed out starting pruned ComfyUI worker. See {log_path}")
+
+    def _log_worker_stats(self, reason: str, prompt_id: str | None = None) -> None:
+        """Read-only, best-effort snapshots; never dump argv, queue or HTTP bodies."""
+        try:
+            response = requests.get(f"{self.url}/system_stats", timeout=2)
+            response.raise_for_status()
+            stats = response.json()
+            system = stats.get("system", {})
+            fields = ("ram_total", "ram_free", "comfyui_version", "python_version", "pytorch_version")
+            device_fields = ("name", "type", "index", "vram_total", "vram_free", "torch_vram_total", "torch_vram_free")
+            event(logger, "worker_stats", reason=reason, prompt_id=prompt_id,
+                  system={key: system.get(key) for key in fields},
+                  devices=[{key: item.get(key) for key in device_fields}
+                           for item in stats.get("devices", [])])
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
+            event(logger, "worker_stats_unavailable", reason=reason, prompt_id=prompt_id)
 
     def _upload_image(self, image: Image.Image, name: str) -> str:
         payload = io.BytesIO()
@@ -210,7 +239,9 @@ class PrunedComfyBackend:
                 raise FileNotFoundError(f"LoRA file missing: {source}")
             expected.add(source.name)
             target = target_dir / source.name
-            if target.is_symlink() and target.resolve() == source:
+            # Never unlink a source already resident in this worker (including
+            # symlinks/hard links). Still check live discovery below.
+            if target.resolve() == source or (target.exists() and target.samefile(source)):
                 continue
             if target.exists() or target.is_symlink():
                 target.unlink()
@@ -411,6 +442,10 @@ class PrunedComfyBackend:
         last_fraction = 0.08
         current_stage = "⏳ Waiting in worker queue"
         last_heartbeat = 0.0
+        last_stats = time.perf_counter()
+        last_sample_time: float | None = None
+        last_sample_value = 0
+        last_sample_node: str | None = None
 
         def emit(fraction: float, label: str) -> None:
             nonlocal last_fraction
@@ -421,14 +456,16 @@ class PrunedComfyBackend:
             try:
                 raw = socket.recv()
                 if isinstance(raw, str):
-                    event = json.loads(raw)
-                    event_type = event.get("type")
-                    data = event.get("data", {})
+                    message = json.loads(raw)
+                    event_type = message.get("type")
+                    data = message.get("data", {})
                     if data.get("prompt_id") in {None, prompt_id}:
                         if event_type == "executing":
                             node = data.get("node")
                             now = time.perf_counter()
                             if active_node is not None:
+                                event(logger, "node_end", prompt_id=prompt_id, node=active_node,
+                                      duration_seconds=now - active_started)
                                 timings[NODE_STAGES.get(active_node, (0, f"node_{active_node}"))[1]] = (
                                     timings.get(NODE_STAGES.get(active_node, (0, f"node_{active_node}"))[1], 0.0)
                                     + now - active_started
@@ -436,36 +473,78 @@ class PrunedComfyBackend:
                             active_node = str(node) if node is not None else None
                             active_started = now
                             if active_node is not None:
+                                last_sample_time = None
+                                last_sample_value = 0
+                                last_sample_node = active_node
+                                event(logger, "node_start", prompt_id=prompt_id, node=active_node,
+                                      elapsed_seconds=now - started)
                                 fraction, current_stage = NODE_STAGES.get(
                                     active_node, (0.24, f"🔧 Processing node {active_node}")
                                 )
                                 emit(fraction, f"{current_stage} · {now - started:.1f}s elapsed")
                         elif event_type == "progress":
+                            now = time.perf_counter()
+                            progress_node = str(data.get("node") or active_node or "unknown")
                             value = int(data.get("value", 0))
                             total = max(1, int(data.get("max", 1)))
                             fraction = value / total
+                            sampling = progress_node == "15"
+                            current_stage = (f"⚡ Sampling step {value}/{total} · {fraction * 100:.0f}%"
+                                             if sampling else f"🔧 Node {progress_node} progress {value}/{total}")
+                            if progress_node != last_sample_node or value < last_sample_value:
+                                last_sample_time = None
+                                last_sample_value = 0
+                                last_sample_node = progress_node
+                            # Sampling has few expensive steps. Other nodes are rate limited.
+                            if value != last_sample_value and (sampling or last_sample_time is None
+                                                              or now - last_sample_time >= 5.0 or value >= total):
+                                interval = now - (last_sample_time if last_sample_time is not None else active_started)
+                                delta = max(1, value - last_sample_value)
+                                event(logger, "sample_progress" if sampling else "node_progress",
+                                      prompt_id=prompt_id, node=progress_node, value=value, total=total,
+                                      elapsed_seconds=now - started, interval_seconds=interval,
+                                      seconds_per_step=interval / delta,
+                                      first_step_includes_loading=last_sample_time is None)
+                                last_sample_time, last_sample_value = now, value
                             emit(
-                                0.25 + 0.57 * fraction,
-                                f"⚡ Sampling step {value}/{total} · {fraction * 100:.0f}% · "
+                                0.25 + 0.57 * fraction if sampling else last_fraction,
+                                f"{current_stage} · "
                                 f"elapsed {time.perf_counter() - started:.1f}s",
                             )
                         elif event_type == "execution_error":
+                            # Never include worker messages, tracebacks or input dumps.
+                            node_id = str(data.get("node_id", ""))
+                            node_id = node_id if node_id.isdecimal() and len(node_id) <= 16 else "unknown"
+                            exception_type = data.get("exception_type")
+                            if not isinstance(exception_type, str) or not re.fullmatch(
+                                r"[A-Za-z_][A-Za-z0-9_.]{0,127}", exception_type
+                            ):
+                                exception_type = "worker error"
+                            event(logger, "worker_error", prompt_id=prompt_id, node=node_id,
+                                  exception_type=exception_type)
                             raise RuntimeError(
-                                f"Pruned ComfyUI generation failed: {data.get('exception_message', data)}"
+                                f"Pruned ComfyUI generation failed at node {node_id} "
+                                f"({exception_type}). See worker log."
                             )
             except websocket.WebSocketTimeoutException:
                 now = time.perf_counter()
                 if now - last_heartbeat >= 5.0:
                     emit(last_fraction, f"{current_stage} · {now - started:.1f}s elapsed")
+                    event(logger, "worker_heartbeat", prompt_id=prompt_id, node=active_node,
+                          elapsed_seconds=now - started, node_elapsed_seconds=now - active_started)
                     last_heartbeat = now
+            now = time.perf_counter()
+            if now - last_stats >= 30.0:
+                self._log_worker_stats("progress", prompt_id)
+                last_stats = now
             response = requests.get(f"{self.url}/history/{prompt_id}", timeout=30)
             response.raise_for_status()
             history = response.json().get(prompt_id)
             if history:
                 status = history.get("status", {})
                 if status.get("status_str") == "error":
-                    messages = status.get("messages", [])
-                    raise RuntimeError(f"Pruned ComfyUI generation failed: {messages[-1] if messages else status}")
+                    event(logger, "worker_error", prompt_id=prompt_id, source="history")
+                    raise RuntimeError("Pruned ComfyUI generation failed. See worker log.")
                 for output in history.get("outputs", {}).values():
                     for key in ("videos", "files", "gifs", "images"):
                         for item in output.get(key, []):
@@ -476,11 +555,19 @@ class PrunedComfyBackend:
                             if path.is_file() and path.suffix.lower() in {".mp4", ".mkv", ".webm"}:
                                 now = time.perf_counter()
                                 if active_node is not None:
+                                    event(logger, "node_end", prompt_id=prompt_id, node=active_node,
+                                        duration_seconds=now - active_started)
                                     label = NODE_STAGES.get(active_node, (0, f"node_{active_node}"))[1]
                                     timings[label] = timings.get(label, 0.0) + now - active_started
+                                event(
+                                    logger, "worker_complete", prompt_id=prompt_id,
+                                    elapsed_seconds=now - started, timings=timings,
+                                )
+                                self._log_worker_stats("completion", prompt_id)
                                 return path.resolve(), timings
         raise TimeoutError(f"Timed out waiting for pruned generation {prompt_id}")
 
+    @traced_generation
     def generate(
         self,
         request: GenerationRequest,
@@ -500,7 +587,8 @@ class PrunedComfyBackend:
                     "Optional learned latent upscaler is missing. Download model type latent_upscaler "
                     "with scripts/download_models.py, then restart the worker."
                 )
-        self.ensure_worker(progress_callback=report)
+        with stage(logger, "worker_startup"):
+            self.ensure_worker(progress_callback=report)
         if request.latent_upscale:
             response = requests.get(f"{self.url}/object_info/MiniMaxH3LearnedLatentUpscale", timeout=30)
             response.raise_for_status()
@@ -557,6 +645,7 @@ class PrunedComfyBackend:
         report(0.07, f"🧬 Synchronizing {len(selected_loras)} pruned LoRA adapter(s)…")
         self._sync_loras([Path(path) for path in selected_paths if path is not None])
         timings["prepare"] = time.perf_counter() - prepare_started
+        event(logger, "stage_end", stage="prepare", duration_seconds=timings["prepare"])
         graph = self.build_workflow(
             prompt=expand_prompt(request.prompt, structured=request.structured_prompt),
             width=width, height=height, frames=frames, seed=int(request.seed), nfe=nfe,
@@ -580,16 +669,20 @@ class PrunedComfyBackend:
             latent_upscale_device=request.latent_upscale_device,
         )
         started = time.perf_counter()
+        event(logger, "workflow_metadata", **workflow_metadata(graph, self.root / "models"))
+        self._log_worker_stats("submission")
         report(0.08, "📤 Submitting pruned workflow to local worker…")
         socket = websocket.create_connection(
             self.url.replace("http://", "ws://").replace("https://", "wss://")
             + f"/ws?clientId={token}",
             timeout=2,
         )
-        response = requests.post(f"{self.url}/prompt", json={"prompt": graph, "client_id": token}, timeout=60)
-        if not response.ok:
-            raise RuntimeError(f"Pruned workflow rejected: {response.text}")
         try:
+            with stage(logger, "submit"):
+                response = requests.post(f"{self.url}/prompt", json={"prompt": graph, "client_id": token}, timeout=60)
+                if not response.ok:
+                    raise RuntimeError(f"Pruned workflow rejected (HTTP {response.status_code}). See worker log.")
+            event(logger, "worker_submit", prompt_id=response.json()["prompt_id"])
             output, worker_timings = self._wait_for_output(
                 response.json()["prompt_id"],
                 socket=socket,
@@ -623,7 +716,8 @@ class PrunedComfyBackend:
         final = self.config.output_dir / f"{time.strftime('%Y%m%d-%H%M%S')}_{request.mode}_seed{request.seed}_{output_width}x{output_height}_pruned{suffix}.mp4"
         final.parent.mkdir(parents=True, exist_ok=True)
         if output != final.resolve():
-            shutil.copy2(output, final)
+            with stage(logger, "output_copy"):
+                shutil.copy2(output, final)
         timings["worker"] = elapsed
         timings["total"] = time.perf_counter() - overall_started
         report(1.0, f"✅ Complete · total {timings['total']:.1f}s · saved {final.name}")

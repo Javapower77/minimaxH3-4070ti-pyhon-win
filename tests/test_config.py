@@ -1,4 +1,42 @@
-from minimax_h3_fl2v.config import GenerationRequest, load_config
+from minimax_h3_fl2v.config import ROOT, GenerationRequest, load_config, load_lora_catalog
+
+
+def test_catalog_local_paths_resolve_from_root_not_catalog_or_cwd(tmp_path, monkeypatch):
+    import yaml
+
+    absolute = tmp_path / "absolute.safetensors"
+    catalog = tmp_path / "catalog.yaml"
+    catalog.write_text(yaml.safe_dump({"catalog": [
+        {"id": str(i), "name": "Local", "filename": "ignored.safetensors", "local_path": value}
+        for i, value in enumerate([".runtime/ComfyUI/models/loras/local.safetensors", str(absolute), None, ""])
+    ]}), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    specs = load_lora_catalog(catalog)
+    expected = ROOT / ".runtime/ComfyUI/models/loras/local.safetensors"
+    assert specs[0].local_path == expected
+    assert specs[0].resolved_path(tmp_path) == expected
+    assert specs[1].local_path == absolute
+    for spec in specs[2:]:
+        assert spec.local_path is None
+        assert spec.resolved_path(tmp_path) == tmp_path / "ignored.safetensors"
+
+
+def test_dmad_dareties_catalog_metadata_and_defaults():
+    cfg = load_config()
+    spec = cfg.lora_by_id("dmad_full_dareties_v4_step600")
+    assert sum(entry.id == spec.id for entry in cfg.catalog) == 1
+    assert spec.local_path == ROOT / ".runtime/ComfyUI/models/loras" / spec.filename
+    assert spec.backend == "comfy_pruned"
+    assert spec.lora_format == "native"
+    assert spec.download_url == "https://civitai.com/api/download/models/3391964?fileId=3281488"
+    assert spec.sha256 == "CA34641D06C4E714D27A8540FD20721EF5DAF54E9D58FA8BE169D33B2D2699A9"
+    assert (spec.nfe, spec.lora_scale, spec.video_shift, spec.audio_shift) == (8, 1.0, 12, 3)
+    assert spec.megapixels == 0.4
+    assert not spec.recommended
+    assert cfg.default_lora_id == "taomate_fl2va_3step_ema"
+    original = cfg.lora_by_id("dmad_4step_lora_critic")
+    assert original.lora_format == "dmad_diffusers"
+    assert (original.nfe, original.audio_shift) == (4, 2)
 
 
 def test_generation_request_latent_upscale_defaults():

@@ -65,7 +65,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    from .diagnostics import initialize_logging, event
+
+    log_path = initialize_logging()
+    event(logging.getLogger(__name__), "application_start", entrypoint="cli", log_file=str(log_path))
     args = build_parser().parse_args(argv)
     enforce_offline_runtime()
     config = load_config()
